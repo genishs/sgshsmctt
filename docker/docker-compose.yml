@@ -13,23 +13,20 @@ services:
       VERSION: "1.21.11"
       MEMORY: "4G"
       
-      # [핵심 로직] 서버 시작 전 실행되는 명령어
-      # 1. /data/plugins 폴더가 없으면 생성 (최초 실행 대비)
-      # 2. find ... -delete: 기존 plugins 폴더에서 '.jar' 파일만 찾아서 모두 삭제 (설정 폴더는 보존됨!)
-      # 3. cp ...: _staging(외부 폴더)에 있는 새 플러그인 파일들을 내부로 복사
-      EXEC_PRE_STARTUP_COMMAND: >
-        mkdir -p /data/plugins && 
-        find /data/plugins -maxdepth 1 -type f -name "*.jar" -delete && 
-        cp -rf /_staging/plugins/* /data/plugins/
+      # [삭제] 작동 안 하던 변수는 깔끔하게 삭제
+      # EXEC_PRE_STARTUP_COMMAND: ... 
       
     volumes:
-      # 1. 서버 데이터 (월드, 로그, 플러그인 설정 폴더 등 보존)
       - ./data:/data
-      
-      # 2. 플러그인 소스 (외부) -> 내부 임시 경로(_staging)로 연결 (읽기 전용)
       - ./plugins:/_staging/plugins:ro
-      
-      # 3. server.properties는 외부 파일 직접 연결 (실시간 수정 반영)
       - ./server.properties:/data/server.properties
-      
+      - ./scripts:/data/scripts
+    
+    # [핵심] 기존 서버 실행 명령(/start)을 가로채서
+    # "내 스크립트를 먼저 실행하고(bash ...), 그 다음에 서버를 켜라(/start)"고 지시함
+    entrypoint: 
+      - "/bin/bash"
+      - "-c"
+      - "bash /data/scripts/update-plugins.sh && /start"
+
     restart: unless-stopped
