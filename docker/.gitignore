@@ -1,0 +1,9 @@
+# Minecraft 서버 데이터 (월드, 로그, 유저 데이터 등 제외)
+data/
+
+# OS 시스템 파일 제외
+.DS_Store
+Thumbs.db
+
+# Docker 상태 파일 제외 (혹시 생길 경우)
+.docker/
