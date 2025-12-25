@@ -11,7 +11,7 @@ services:
       EULA: "TRUE"
       TYPE: "PAPER"
       VERSION: "1.21.11"
-      MEMORY: "4G"
+      MEMORY: "28G"
       
       # [삭제] 작동 안 하던 변수는 깔끔하게 삭제
       # EXEC_PRE_STARTUP_COMMAND: ... 
