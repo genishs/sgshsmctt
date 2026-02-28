@@ -10,8 +10,13 @@ minecraft 구동을 위한 java / bedrock 함께 사용할 수 있는 서버 구
 
 # 구동 방법
 * 쉘에서  docker 경로로 접근한 뒤,
-* docker-compose up -d 입력하면 끝.
-* server.properties는 직접 수정해서 사용하세용
+* 최신 itzg/minecraft-server 이미지를 자동으로 내려받고 싶으면
+  `docker/pull-and-up.sh`(또는 `bash docker/pull-and-up.sh`)를 실행하세요. 
+  또는 Windows에서는 `docker/pull-and-up.bat`을 실행하면 같은 작업을 수행합니다.
+  내부적으로 `docker pull` 후 `docker image prune`로 사용하지 않는 이전 이미지들을
+  정리하고 `docker compose up -d`를 수행합니다.
+* 그냥 기본으로 올리려면 `docker-compose up -d`도 가능합니다.
+* `server.properties`는 직접 수정해서 사용하세용
 
 # 아래는 자동 생성 내용
 
@@ -24,7 +29,9 @@ minecraft 구동을 위한 java / bedrock 함께 사용할 수 있는 서버 구
 - **컨테이너 서버**: `itzg/minecraft-server` 이미지를 실행하는 단일 Docker 컨테이너
 - **플러그인 시스템**: 크로스플레이를 가능하게 하는 두 가지 필수 플러그인:
   - `Geyser-Spigot.jar` - Bedrock 프로토콜을 Java 프로토콜로 변환
+    - https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot 파일을 다운로드하여 교체한다
   - `floodgate-spigot.jar` - Bedrock 플레이어 인증 처리
+    - https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest/downloads/spigot 파일을 다운로드하여 교체한다
 - **플러그인 로딩**: `docker-compose.yml`의 커스텀 엔트리포인트가 기본 `/start` 명령을 가로채서 서버 시작 전에 `update-plugins.sh` 실행
 - **설정**: `server.properties`(읽기 전용 볼륨으로 마운트)를 통해 서버 동작 제어
 

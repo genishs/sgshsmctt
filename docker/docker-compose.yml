@@ -1,6 +1,8 @@
 services:
   mc:
-    image: itzg/minecraft-server
+    # 명시적으로 latest 태그를 붙여서
+    # `docker compose pull`이나 `up` 시 최신 이미지를 가져오도록 함
+    image: itzg/minecraft-server:latest
     container_name: mc-crossplay
     tty: true
     stdin_open: true
@@ -30,3 +32,5 @@ services:
       - "bash /data/scripts/update-plugins.sh && /start"
 
     restart: unless-stopped
+    mem_limit: 30000000000
+    memswap_limit: 30000000000
