@@ -1,90 +1,250 @@
-# sgshsmctt
-minecraft 구동을 위한 java / bedrock 함께 사용할 수 있는 서버 구동 스크립트
+# sgshsmctt — Minecraft Java + Bedrock 크로스플레이 서버
 
-# require
-* 이 스크립트는 windows 환경에서 테스트되었습니다. 
-* 당연하겠지만.. git?
-* 메모장 등 편집기
-* docker - 이 서버는 docker container에서 구동됩니다. docker desktop 은 있으면 좋고 없으면 말고..
-* powershell 등 쉘
+Docker 기반 마인크래프트 서버입니다. Java Edition과 Bedrock Edition 플레이어가 동일한 서버에서 함께 플레이할 수 있도록 설계되어 있으며, 서버 시작 시 플러그인을 자동으로 최신 버전으로 받아옵니다.
 
-# 구동 방법
-* 쉘에서  docker 경로로 접근한 뒤,
-* 최신 itzg/minecraft-server 이미지를 자동으로 내려받고 싶으면
-  `docker/pull-and-up.sh`(또는 `bash docker/pull-and-up.sh`)를 실행하세요. 
-  또는 Windows에서는 `docker/pull-and-up.bat`을 실행하면 같은 작업을 수행합니다.
-  내부적으로 `docker pull` 후 `docker image prune`로 사용하지 않는 이전 이미지들을
-  정리하고 `docker compose up -d`를 수행합니다.
-* 그냥 기본으로 올리려면 `docker-compose up -d`도 가능합니다.
-* `server.properties`는 직접 수정해서 사용하세용
+---
 
-# 아래는 자동 생성 내용
+## 목차
 
-# sgshsmctt - AI 에이전트 가이드
+1. [요구사항](#요구사항)
+2. [구조](#구조)
+3. [빠른 시작](#빠른-시작)
+4. [플러그인 자동 설치 로직](#플러그인-자동-설치-로직)
+5. [설정](#설정)
+6. [포트](#포트)
+7. [베드락 크로스플레이 현황](#베드락-크로스플레이-현황)
+8. [트러블슈팅](#트러블슈팅)
 
-이 프로젝트는 Docker를 통해 Java(Paper)와 Bedrock(Geyser) 크로스플레이를 지원하는 **Minecraft 서버 런처**입니다.
+---
 
-## 아키텍처
+## 요구사항
 
-- **컨테이너 서버**: `itzg/minecraft-server` 이미지를 실행하는 단일 Docker 컨테이너
-- **플러그인 시스템**: 크로스플레이를 가능하게 하는 두 가지 필수 플러그인:
-  - `Geyser-Spigot.jar` - Bedrock 프로토콜을 Java 프로토콜로 변환
-    - https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot 파일을 다운로드하여 교체한다
-  - `floodgate-spigot.jar` - Bedrock 플레이어 인증 처리
-    - https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest/downloads/spigot 파일을 다운로드하여 교체한다
-- **플러그인 로딩**: `docker-compose.yml`의 커스텀 엔트리포인트가 기본 `/start` 명령을 가로채서 서버 시작 전에 `update-plugins.sh` 실행
-- **설정**: `server.properties`(읽기 전용 볼륨으로 마운트)를 통해 서버 동작 제어
+- **Docker Desktop** (Windows / macOS) 또는 Docker Engine (Linux)
+- **Git** (저장소 클론 시)
+- PowerShell 또는 bash 쉘
 
-## 주요 워크플로우
+---
 
-### 서버 구동
-```bash
+## 구조
+
+```
+sgshsmctt/
+├── docker/
+│   ├── docker-compose.yml        # 서버 컨테이너 정의
+│   ├── server.properties         # 마인크래프트 서버 설정
+│   ├── pull-and-up.sh            # 최신 이미지 pull 후 서버 기동 (Linux/macOS)
+│   ├── pull-and-up.bat           # 최신 이미지 pull 후 서버 기동 (Windows)
+│   ├── plugins/                  # 스테이징 플러그인 폴더 (jar 직접 배치 시 사용)
+│   └── scripts/
+│       └── update-plugins.sh     # 서버 기동 전 플러그인 자동 설치 스크립트
+└── README.md
+```
+
+> `docker/data/`는 월드 데이터, 로그 등 서버 런타임 데이터가 저장되는 폴더로 git에서 제외됩니다.
+
+---
+
+## 빠른 시작
+
+### 일반 시작
+
+```powershell
 cd docker
-docker-compose up -d
+docker compose up -d
 ```
-플러그인 업데이트 스크립트 완료 후 서버가 자동으로 시작됩니다.
 
-### 플러그인 관리
-- **플러그인 추가/업데이트**: 
-  1. JAR 파일을 `docker/plugins/`에 배치
-  2. 컨테이너 재시작: `docker-compose restart`
-  3. `update-plugins.sh`가 `/_staging/plugins` → `/data/plugins`로 자동 복사
-  4. 재시작할 때마다 이전 플러그인 삭제 (클린 슬레이트)
+### 최신 이미지로 시작 (권장)
 
-### 서버 설정 수정
-`docker/server.properties`를 직접 편집하면 다음 재시작 시 변경사항이 적용됩니다.
+itzg 이미지를 최신으로 갱신하고 불필요한 구버전 이미지를 정리한 뒤 서버를 기동합니다.
 
-## 핵심 구현 세부사항
-
-### Docker 엔트리포인트 패턴
-`docker-compose.yml`의 `entrypoint`는 **의도적**으로 기본 `/start` 명령을 오버라이드합니다:
-```dockerfile
-entrypoint: 
-  - "/bin/bash"
-  - "-c"
-  - "bash /data/scripts/update-plugins.sh && /start"
+**Linux / macOS:**
+```bash
+bash docker/pull-and-up.sh
 ```
-**절대 제거하지 말 것**: 이것이 서버 부팅 전에 플러그인이 업데이트되도록 보장합니다.
 
-### 플러그인 볼륨 매핑
-- `./plugins:/_staging/plugins:ro` — 읽기 전용 스테이징 영역 (호스트 측)
-- `update-plugins.sh`가 스테이징 → `/data/plugins` (컨테이너 측)로 복사
-- 이미지를 다시 빌드하지 않고도 플러그인을 추가할 수 있습니다
+**Windows:**
+```bat
+docker\pull-and-up.bat
+```
 
-### 크로스플레이 주의사항
-- Bedrock 연결을 위해 Geyser가 반드시 필요
-- floodgate가 Java/Bedrock 혼합 인증 처리 (`server.properties`의 management server 설정 참조)
-- 포트: `25565` (Java), `19132/udp` (Bedrock)
+### 로그 확인
 
-## 언어 및 스타일 노트
+```powershell
+docker logs -f mc-crossplay
+```
 
-- **한글 주석**: README 및 설정 파일에서 한글 사용 — 편집 시 유지
-- **Bash 규칙**: 스크립트는 간단하고 직관적인 로직 사용 (복잡한 파이프라인 없음)
-- **설정 철학**: 코드 변경보다는 환경 변수 선호
+서버가 완전히 기동되면 다음 메시지가 나타납니다:
+```
+Done (XX.XXXs)! For help, type "help"
+```
 
-## 수정 시 주의사항
+---
 
-1. **기능 추가**: `docker/scripts/`를 통해 컨테이너 시작 로직 구현
-2. **서버 동작 변경**: `server.properties` 또는 Docker 환경 변수 편집
-3. **플러그인 문제**: 코드 디버깅 전에 `docker-compose.yml` 볼륨 확인
-4. **테스트**: 이미지 재빌드가 아닌 `docker-compose up -d`로 로컬 실행
+## 플러그인 자동 설치 로직
+
+`update-plugins.sh`가 서버 시작 전에 실행되며 아래 순서로 동작합니다.
+
+### 1단계 — Minecraft 최신 버전 확인
+
+Mojang 공식 API에서 현재 최신 Java Edition 릴리즈 버전을 조회합니다.
+
+```
+https://piston-meta.mojang.com/mc/game/version_manifest_v2.json
+```
+
+`docker-compose.yml`에 `VERSION`이 지정되어 있으면 그 버전을 사용하고, 없으면 최신 버전을 자동으로 사용합니다.
+
+### 2단계 — Geyser 공식 릴리즈 설치 시도
+
+GeyserMC 공식 빌드 API에서 최신 릴리즈를 다운로드합니다.
+
+```
+https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot
+https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest/downloads/spigot
+```
+
+5MB 이상의 정상 파일인지 검증 후 설치합니다.
+
+### 3단계 — Geyser CI 스냅샷 설치 시도 (공식 실패 시)
+
+공식 빌드가 실패할 경우 GeyserMC CI 서버의 최신 빌드를 시도합니다.
+
+```
+https://ci.opencollab.dev/job/GeyserMC/job/Geyser/job/master/lastSuccessfulBuild/...
+```
+
+### 4단계 — Geyser 없이 Purpur 구동
+
+모든 Geyser 시도가 실패하면 Geyser 없이 Java Edition 전용으로 서버를 구동합니다. 서버 자체는 정상 작동합니다.
+
+### 5단계 — ViaVersion 설치
+
+다양한 버전의 Java Edition 클라이언트가 접속할 수 있도록 GitHub releases에서 ViaVersion 최신 버전을 다운로드합니다.
+
+```
+https://api.github.com/repos/ViaVersion/ViaVersion/releases/latest
+```
+
+### 설치 결과 요약 예시
+
+```
+[Script] ============ 설치 결과 ============
+[Script]  서버 버전  : 26.1.2
+[Script]  Geyser     : ✓ 설치됨 (베드락 크로스플레이 가능)
+[Script]  Floodgate  : ✓ 설치됨
+[Script]  ViaVersion : ✓ 설치됨
+[Script] =======================================
+```
+
+---
+
+## 설정
+
+### docker-compose.yml 주요 환경변수
+
+| 변수 | 기본값 | 설명 |
+|------|--------|------|
+| `TYPE` | `PURPUR` | 서버 타입. PURPUR, PAPER 등 지원 |
+| `VERSION` | `26.1.2` | 마인크래프트 버전 |
+| `MEMORY` | `28G` | JVM 힙 메모리 (서버 사양에 맞게 조정) |
+| `EULA` | `TRUE` | Minecraft EULA 동의 (변경 불가) |
+
+### server.properties 주요 설정
+
+`docker/server.properties`를 직접 편집하면 다음 재시작 시 적용됩니다.
+
+| 항목 | 현재값 | 설명 |
+|------|--------|------|
+| `difficulty` | `hard` | 난이도 |
+| `max-players` | `20` | 최대 접속 인원 |
+| `online-mode` | `true` | 정품 인증 여부 |
+| `view-distance` | `30` | 시야 거리 (청크) |
+| `level-name` | `2026sgshs` | 월드 폴더명 |
+| `rcon.port` | `25575` | RCON 포트 |
+
+### 스테이징 플러그인 추가
+
+`docker/plugins/` 폴더에 `.jar` 파일을 넣으면 서버 시작 시 `/data/plugins/`로 자동 복사됩니다. 스크립트가 자동 다운로드하는 Geyser/Floodgate/ViaVersion 이외의 플러그인을 추가할 때 사용합니다.
+
+```
+docker/plugins/
+└── 내가원하는플러그인.jar   ← 여기에 배치
+```
+
+---
+
+## 포트
+
+| 포트 | 프로토콜 | 용도 |
+|------|----------|------|
+| `25565` | TCP | Java Edition 클라이언트 접속 |
+| `19132` | UDP | Bedrock Edition 클라이언트 접속 (Geyser) |
+| `25575` | TCP | RCON (서버 원격 명령, 내부용) |
+
+방화벽/공유기에서 25565(TCP)와 19132(UDP)를 포트 포워딩해야 외부에서 접속 가능합니다.
+
+---
+
+## 베드락 크로스플레이 현황
+
+Geyser는 Java Edition 서버에 Bedrock 클라이언트가 접속할 수 있도록 프로토콜을 변환해주는 플러그인입니다.
+
+### 현재 상황 (2026년 5월 기준)
+
+Minecraft Java Edition이 연도 기반 새 버전 체계(26.x)로 전환되면서 Geyser의 공식 지원이 아직 완료되지 않았습니다.
+
+| 구성 | 상태 |
+|------|------|
+| Java 26.1.2 클라이언트 → 이 서버 | ✅ 정상 접속 |
+| Bedrock 클라이언트 → 이 서버 | ❌ Geyser 미지원 (대기 중) |
+
+스크립트는 이미 최신 Geyser를 자동으로 설치하도록 설정되어 있습니다. GeyserMC가 26.1.2 서버를 공식 지원하는 버전을 릴리즈하면 다음 서버 재시작 시 자동으로 활성화됩니다.
+
+> Geyser 지원 진행 상황: https://github.com/GeyserMC/Geyser/issues
+
+---
+
+## 트러블슈팅
+
+### 서버가 시작되지 않음
+
+```powershell
+docker logs mc-crossplay
+```
+
+로그에서 `[Script]` 접두사가 붙은 줄을 찾아 플러그인 설치 단계를 확인합니다.
+
+### 접속 불가 (Java Edition)
+
+1. 서버가 완전히 기동됐는지 확인: `Done (XX.XXXs)!` 메시지 확인
+2. 포트 25565가 열려있는지 확인
+3. `online-mode=true`인 경우 정품 계정으로 접속
+
+### 플러그인 오류
+
+1. `docker logs mc-crossplay | grep ERROR` 로 오류 확인
+2. `docker/plugins/` 폴더의 수동 배치 플러그인이 서버 버전과 호환되는지 확인
+3. 특정 플러그인을 비활성화하려면 해당 jar를 `docker/plugins/`에서 제거 후 재시작
+
+### 서버 재시작
+
+```powershell
+cd docker
+docker compose restart
+```
+
+### 서버 완전 재기동 (플러그인 재설치 포함)
+
+```powershell
+cd docker
+docker compose down
+docker compose up -d
+```
+
+`docker compose down && docker compose up -d`를 하면 `update-plugins.sh`가 다시 실행되어 플러그인을 최신 버전으로 재설치합니다.
+
+---
+
+## 라이선스
+
+[LICENSE](LICENSE) 참조

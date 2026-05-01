@@ -1,9 +1,15 @@
 # Minecraft 서버 데이터 (월드, 로그, 유저 데이터 등 제외)
 docker/data/
 
+# 스테이징 플러그인 jar (서버 기동 시 자동 다운로드됨)
+docker/plugins/*.jar
+
 # OS 시스템 파일 제외
 .DS_Store
 Thumbs.db
 
-# Docker 상태 파일 제외 (혹시 생길 경우)
+# Docker 상태 파일 제외
 docker/.docker/
+
+# Claude Code 설정
+.claude/
