@@ -1,10 +1,12 @@
 #Minecraft server properties
-#Fri May 01 02:59:36 UTC 2026
+#Purpur 26.2 기준 예시 설정 - 이 파일을 docker/server.properties 로 복사한 뒤 사용하세요
 accepts-transfers=false
 allow-flight=false
 broadcast-console-to-ops=true
 broadcast-rcon-to-ops=true
 bug-report-link=
+chat-spam-threshold-seconds=10
+command-spam-threshold-seconds=10
 debug=false
 difficulty=hard
 enable-code-of-conduct=false
@@ -32,7 +34,7 @@ management-server-allowed-origins=
 management-server-enabled=false
 management-server-host=localhost
 management-server-port=0
-management-server-secret=6pK8Aj4eJxU3C2swjjs7F6zyYiJRWkUYiYKfuT2V
+management-server-secret=
 management-server-tls-enabled=true
 management-server-tls-keystore=
 management-server-tls-keystore-password=
@@ -49,7 +51,7 @@ player-idle-timeout=0
 prevent-proxy-connections=false
 query.port=25565
 rate-limit=0
-rcon.password=3a6679917b11cd8e7a62b8b2
+rcon.password=
 rcon.port=25575
 region-file-compression=deflate
 require-resource-pack=false

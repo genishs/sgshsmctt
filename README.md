@@ -31,7 +31,8 @@ Docker 기반 마인크래프트 서버입니다. Java Edition과 Bedrock Editio
 sgshsmctt/
 ├── docker/
 │   ├── docker-compose.yml        # 서버 컨테이너 정의
-│   ├── server.properties         # 마인크래프트 서버 설정
+│   ├── server.properties         # 마인크래프트 서버 설정 (git 제외 - 비밀값 포함)
+│   ├── server.properties.example # 위 파일의 예시 템플릿
 │   ├── pull-and-up.sh            # 최신 이미지 pull 후 서버 기동 (Linux/macOS)
 │   ├── pull-and-up.bat           # 최신 이미지 pull 후 서버 기동 (Windows)
 │   ├── plugins/                  # 스테이징 플러그인 폴더 (jar 직접 배치 시 사용)
@@ -45,6 +46,17 @@ sgshsmctt/
 ---
 
 ## 빠른 시작
+
+### 최초 1회: 설정 파일 준비
+
+`docker/server.properties`는 rcon 비밀번호 등 비밀값을 담고 있어 git에서 제외됩니다.
+저장소를 새로 클론했다면 예시 파일을 복사해 두세요. 이 파일이 없으면 docker가 같은
+경로에 **디렉터리를 만들어버려** 서버가 기동되지 않습니다.
+
+```powershell
+cd docker
+copy server.properties.example server.properties
+```
 
 ### 일반 시작
 

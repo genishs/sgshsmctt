@@ -4,6 +4,10 @@ docker/data/
 # 스테이징 플러그인 jar (서버 기동 시 자동 다운로드됨)
 docker/plugins/*.jar
 
+# 실제 서버 설정 (rcon 비밀번호 등 비밀값 포함)
+# 최초 구동 시 server.properties.example 을 복사해서 사용할 것
+docker/server.properties
+
 # OS 시스템 파일 제외
 .DS_Store
 Thumbs.db
