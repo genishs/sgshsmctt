@@ -26,6 +26,10 @@ download() {
 
 # ─────────────────────────────────────────
 # STEP 1: 최신 마인크래프트 릴리즈 버전 확인
+#
+# docker-compose.yml 의 VERSION 은 고정값이라 이미지를 최신화해도 서버 버전은
+# 오르지 않는다. 방치하면 최신 클라이언트가 접속하지 못하고 Geyser 도 베드락
+# 접속을 처리하지 못하므로, 뒤처진 경우 기동 로그에 경고를 남긴다.
 # ─────────────────────────────────────────
 echo ""
 echo "[Script] [1/5] 최신 Minecraft 릴리즈 버전 확인..."
@@ -34,9 +38,48 @@ MC_LATEST=$(curl -fsSL --max-time 10 \
     "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json" 2>/dev/null \
     | grep -o '"release":[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4 || echo "")
 
+# Purpur 가 실제로 서버 jar 를 제공하는 최신 버전.
+# Mojang 릴리즈보다 며칠 늦게 따라오므로 업그레이드 가능 판단은 이 값을 기준으로 한다.
+PURPUR_LATEST=$(curl -fsSL --max-time 10 "https://api.purpurmc.org/v2/purpur" 2>/dev/null \
+    | grep -o '"current":[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4 || echo "")
+
 MC_VERSION="${VERSION:-${MC_LATEST:-LATEST}}"
 echo "[Script]   Minecraft 최신 릴리즈 : ${MC_LATEST:-확인불가}"
+echo "[Script]   Purpur 지원 최신      : ${PURPUR_LATEST:-확인불가}"
 echo "[Script]   서버 실행 버전        : $MC_VERSION"
+
+# 요약 블록에서 다시 출력할 한 줄짜리 상태
+VERSION_STATUS="확인불가 (버전 API 조회 실패)"
+VERSION_OUTDATED=false
+
+if [ -n "$PURPUR_LATEST" ]; then
+    if [ "$MC_VERSION" = "$PURPUR_LATEST" ]; then
+        if [ -n "$MC_LATEST" ] && [ "$MC_LATEST" != "$PURPUR_LATEST" ]; then
+            # 서버는 Purpur 최신인데 Mojang 이 더 앞서간 상태 - 우리가 할 일은 없다
+            VERSION_STATUS="최신 (Mojang $MC_LATEST 은 Purpur 지원 대기 중)"
+        else
+            VERSION_STATUS="최신"
+        fi
+    else
+        VERSION_OUTDATED=true
+        VERSION_STATUS="업그레이드 가능 → $PURPUR_LATEST"
+    fi
+fi
+
+if [ "$VERSION_OUTDATED" = "true" ]; then
+    echo ""
+    echo "[Script] ┌──────────────────────────────────────────────────────────┐"
+    echo "[Script] │ ⚠ 서버 버전이 뒤처져 있습니다                            │"
+    echo "[Script] └──────────────────────────────────────────────────────────┘"
+    echo "[Script]   현재 $MC_VERSION → Purpur 는 이미 $PURPUR_LATEST 를 지원합니다."
+    echo "[Script]   방치하면 최신 클라이언트가 접속하지 못하고, Geyser 가 베드락"
+    echo "[Script]   접속을 처리하지 못합니다."
+    echo "[Script]"
+    echo "[Script]   업그레이드: docker-compose.yml 의 VERSION 을 $PURPUR_LATEST 로 수정"
+    echo "[Script]   ※ 월드 데이터가 변환되며 되돌릴 수 없으므로 먼저 백업하세요."
+    echo "[Script]   자세한 절차는 README 의 '버전 업그레이드' 절 참조."
+    echo ""
+fi
 
 # ─────────────────────────────────────────
 # STEP 2 & 3: Geyser + Floodgate 설치
@@ -129,7 +172,7 @@ fi
 # ─────────────────────────────────────────
 echo ""
 echo "[Script] ============ 설치 결과 ============"
-echo "[Script]  서버 버전  : $MC_VERSION"
+echo "[Script]  서버 버전  : $MC_VERSION ($VERSION_STATUS)"
 echo "[Script]  Geyser     : $([ "$GEYSER_INSTALLED" = "true" ] && echo "✓ 설치됨 (베드락 크로스플레이 가능)" || echo "✗ 미설치 (베드락 불가)")"
 echo "[Script]  Floodgate  : $([ "$FLOODGATE_INSTALLED" = "true" ] && echo "✓ 설치됨" || echo "✗ 미설치")"
 echo "[Script]  ViaVersion : $([ -f /data/plugins/ViaVersion.jar ] && echo "✓ 설치됨" || echo "✗ 미설치")"
