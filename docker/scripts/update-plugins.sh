@@ -29,9 +29,10 @@ download() {
 # ─────────────────────────────────────────
 echo ""
 echo "[Script] [1/5] 최신 Minecraft 릴리즈 버전 확인..."
+# Mojang / GitHub API 응답은 콜론 뒤에 공백이 들어가므로 [[:space:]]* 를 넣어야 매칭됨
 MC_LATEST=$(curl -fsSL --max-time 10 \
     "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json" 2>/dev/null \
-    | grep -o '"release":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "")
+    | grep -o '"release":[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4 || echo "")
 
 MC_VERSION="${VERSION:-${MC_LATEST:-LATEST}}"
 echo "[Script]   Minecraft 최신 릴리즈 : ${MC_LATEST:-확인불가}"
@@ -106,7 +107,7 @@ fi
 echo ""
 echo "[Script] [5/5] ViaVersion 설치 중..."
 VIA_GH_URL=$(curl -fsSL --max-time 10 "https://api.github.com/repos/ViaVersion/ViaVersion/releases/latest" 2>/dev/null \
-    | grep -o '"browser_download_url":"[^"]*\.jar"' | head -1 | cut -d'"' -f4)
+    | grep -o '"browser_download_url":[[:space:]]*"[^"]*\.jar"' | head -1 | cut -d'"' -f4)
 if [ -n "$VIA_GH_URL" ]; then
     if download "$VIA_GH_URL" "/data/plugins/ViaVersion.jar"; then
         VIA_SIZE=$(wc -c < /data/plugins/ViaVersion.jar 2>/dev/null || echo 0)
