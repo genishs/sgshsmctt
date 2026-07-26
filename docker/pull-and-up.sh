@@ -4,6 +4,10 @@
 
 set -euo pipefail
 
+# compose 파일이 있는 폴더(이 스크립트의 위치)로 이동
+# 저장소 루트에서 `bash docker/pull-and-up.sh` 로 실행해도 동작하도록 함
+cd "$(dirname "$0")"
+
 echo "[info] Pulling latest itzg/minecraft-server image..."
 docker pull itzg/minecraft-server:latest
 
