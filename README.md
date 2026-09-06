@@ -2,6 +2,10 @@
 
 Docker 기반 마인크래프트 서버입니다. Java Edition과 Bedrock Edition 플레이어가 동일한 서버에서 함께 플레이할 수 있도록 설계되어 있으며, 서버 시작 시 플러그인을 자동으로 최신 버전으로 받아옵니다.
 
+> **처음 띄우는 분은 [RUNNING.md](RUNNING.md) 부터.** 빈 장비에서 접속까지를 순서대로 따라가는
+> 절차서입니다(Windows·Linux, 메모리 맞추기, 접속, 콘솔, 백업, 문제 해결표). 이 README 는 구조와
+> 설정을 설명하는 참고서입니다.
+
 ---
 
 ## 목차
@@ -24,9 +28,11 @@ Docker 기반 마인크래프트 서버입니다. Java Edition과 Bedrock Editio
 - **Docker Desktop** (Windows / macOS) 또는 Docker Engine (Linux)
 - **Git** (저장소 클론 시)
 - PowerShell 또는 bash 쉘
-- **메모리**: 현재 `MEMORY=28G`, 컨테이너 상한 30GB로 설정되어 있습니다. 사양이 낮은
-  머신에서는 [docker-compose.yml](docker/docker-compose.yml)의 `MEMORY`와 `mem_limit`을
-  먼저 낮춰야 합니다.
+- **메모리**: 커밋된 값은 `MEMORY=28G`, 컨테이너 상한 30GB이며 RAM 32GB 급 장비 기준입니다.
+  그보다 작은 장비에서는 `docker-compose.yml` 을 고치지 말고 **장비별 override 파일**
+  ([docker-compose.override.yml.example](docker/docker-compose.override.yml.example) 복사)로
+  낮춥니다. 실측으로는 힙 6G 면 소수 인원 플레이에 충분했습니다(컨테이너 사용량 4.1GiB).
+  → [메모리와 override](#메모리와-override)
 - **디스크**: 월드 데이터 기준 수 GB + 백업본. 서버 jar와 라이브러리는 매 버전 업그레이드마다
   새로 받습니다.
 
@@ -38,6 +44,8 @@ Docker 기반 마인크래프트 서버입니다. Java Edition과 Bedrock Editio
 sgshsmctt/
 ├── docker/
 │   ├── docker-compose.yml        # 서버 컨테이너 정의 (버전·메모리·포트·볼륨)
+│   ├── docker-compose.override.yml          # 장비별 메모리 override — git 제외
+│   ├── docker-compose.override.yml.example  # 위 파일의 템플릿 (RAM 16GB 기준값)
 │   ├── server.properties         # 실제 서버 설정 — git 제외 (비밀값 포함)
 │   ├── server.properties.example # 위 파일의 템플릿 (비밀값만 비어 있음)
 │   ├── pull-and-up.sh            # 최신 이미지 pull 후 서버 기동 (Linux/macOS)
@@ -49,7 +57,8 @@ sgshsmctt/
 ├── .github/
 │   └── copilot-instructions.md   # AI 에이전트용 프로젝트 가이드
 ├── LICENSE
-└── README.md
+├── README.md                     # 이 문서 — 구조·설정 참고서
+└── RUNNING.md                    # 실행 절차서 — 빈 장비에서 접속까지
 ```
 
 git에서 제외되는 항목 ([.gitignore](.gitignore)):
@@ -58,11 +67,15 @@ git에서 제외되는 항목 ([.gitignore](.gitignore)):
 |------|------|
 | `docker/data/` | 월드·로그·유저 데이터 등 런타임 데이터. 서버 jar와 백업 tar도 여기 쌓입니다 |
 | `docker/server.properties` | rcon 비밀번호 등 비밀값 포함. 서버가 기동할 때마다 이 파일을 다시 씁니다 |
+| `docker/docker-compose.override.yml` | 장비별 메모리 값. 커밋된 compose 를 건드리지 않고 겹쳐 씁니다 |
 | `docker/plugins/*.jar` | 기동 시 자동 다운로드되므로 저장소에 담지 않음 |
+| `.idea/` | IDE 설정 |
 
 ---
 
 ## 빠른 시작
+
+아래는 요약입니다. 단계별 설명·확인 방법·접속·운영은 [RUNNING.md](RUNNING.md) 에 있습니다.
 
 ### 최초 1회: 설정 파일 준비
 
@@ -73,6 +86,12 @@ git에서 제외되는 항목 ([.gitignore](.gitignore)):
 ```powershell
 cd docker
 copy server.properties.example server.properties
+```
+
+RAM 32GB 미만 장비라면 메모리 override 도 같이 준비합니다 → [메모리와 override](#메모리와-override)
+
+```powershell
+copy docker-compose.override.yml.example docker-compose.override.yml
 ```
 
 ### 일반 시작
@@ -222,7 +241,7 @@ Geyser가 미설치면 베드락 접속만 불가하고 Java 접속은 정상입
 |------|--------|------|
 | `TYPE` | `PURPUR` | 서버 타입. PURPUR, PAPER 등 지원 |
 | `VERSION` | `26.2` | 마인크래프트 버전 — **고정값이라 직접 올려야 최신이 됩니다** |
-| `MEMORY` | `28G` | JVM 힙 메모리 (서버 사양에 맞게 조정) |
+| `MEMORY` | `28G` | JVM 힙 메모리(`-Xms`/`-Xmx`). RAM 32GB 급 기준값 — 작은 장비는 override 로 낮춤 |
 | `EULA` | `TRUE` | Minecraft EULA 동의 (변경 불가) |
 
 컨테이너 자체 설정:
@@ -232,7 +251,49 @@ Geyser가 미설치면 베드락 접속만 불가하고 Java 접속은 정상입
 | `image` | `itzg/minecraft-server:latest` | `docker compose pull` 시 최신 이미지 자동 취득 |
 | `restart` | `unless-stopped` | 크래시 시 자동 복구. 단 **명시적으로 stop한 컨테이너는 재부팅 후에도 자동 기동되지 않습니다** |
 | `mem_limit` | `30000000000` (30GB) | 컨테이너 메모리 상한. `MEMORY`보다 여유 있게 설정 |
+| `memswap_limit` | `mem_limit` 과 동일 | 컨테이너 스왑 사용을 **0 으로 잠금**(의도). JVM 힙은 스왑시키지 않습니다 |
+| `tty` / `stdin_open` | `true` | `docker attach` 로 서버 콘솔에 직접 붙을 수 있게 함 |
 | `entrypoint` | `update-plugins.sh && /start` | 기본 `/start`를 가로채 플러그인 설치를 먼저 수행 |
+
+### 메모리와 override
+
+커밋된 `MEMORY=28G` / 30GB 상한은 원래 대상 장비(RAM 32GB 급) 기준입니다. 다른 장비에서는
+`docker-compose.yml` 을 고치지 않고 **같은 폴더의 `docker-compose.override.yml`** 로 겹쳐 씁니다.
+compose 가 그 이름을 자동으로 읽고, 파일은 git 에서 제외되어 있어 장비마다 값이 달라도 됩니다.
+
+```bash
+cd docker
+cp docker-compose.override.yml.example docker-compose.override.yml   # 16GB 장비 기준값
+docker compose config | grep -E "MEMORY|mem_limit|memswap_limit"      # 적용값 확인
+```
+
+| 장비 RAM | `MEMORY` | `mem_limit` = `memswap_limit` |
+|----------|----------|-------------------------------|
+| 32GB 이상 | `28G` (커밋값) | 30GB (커밋값) |
+| 16GB | `6G` | `8g` — 실측 컨테이너 사용량 4.1GiB, 스왑 0 (2026-09-04) |
+| 8GB | `3G`~`4G` | `5g`~`6g` — `view-distance` 도 10 정도로 |
+
+알아 둘 것 두 가지:
+
+- **28G 는 작은 장비에서도 「뜹니다」.** Linux 기본(`vm.overcommit_memory` 허용) + itzg 기본
+  (`USE_AIKAR_FLAGS` off → `AlwaysPreTouch` 없음)이라 힙을 미리 만지지 않습니다. 문제는 그 뒤입니다.
+  JVM 은 `-Xmx` 만 보고 GC 시점을 정하므로 호스트 압박을 못 느낀 채 자라다가 RAM+swap 벽에서
+  OOM killer 에 죽습니다. "몇 시간 잘 되다가 컨테이너가 사라진다"가 이 증상입니다.
+- **스왑으로 메우지 마세요.** `memswap_limit == mem_limit` 은 스왑을 0 으로 잠그는 의도된 설정입니다.
+  풀어 주더라도 GC 가 살아 있는 힙 전체를 훑기 때문에 힙이 스왑에 올라가면 20 TPS 틱 루프가
+  초~분 단위로 멈춥니다. 부족하면 `MEMORY` 를 줄이는 것이 답입니다.
+
+### 서버 콘솔 접근
+
+```bash
+docker exec -i mc-crossplay rcon-cli          # 대화형 (Ctrl+D 로 나옴)
+docker exec mc-crossplay rcon-cli op 닉네임    # 한 줄
+docker attach mc-crossplay                     # 콘솔 직결 — 나올 때 Ctrl+P Ctrl+Q (Ctrl+C 는 서버 종료)
+```
+
+`rcon-cli` 는 이미지가 기동마다 임의 생성해 `server.properties` 에 써넣는 rcon 비밀번호를
+알아서 읽습니다. 직접 적어 둔 `rcon.password` 는 덮이므로 비워 두고, 고정 비밀번호가 꼭 필요할 때만
+override 파일에 `RCON_PASSWORD` 환경변수를 둡니다.
 
 ### server.properties 주요 설정
 
@@ -249,6 +310,7 @@ git에서는 제외되어 있습니다.
 | `view-distance` | `30` | 시야 거리 (청크) |
 | `level-name` | `2026sgshs` | 월드 폴더명. 바꾸면 **새 월드가 생성**됩니다 |
 | `rcon.port` | `25575` | RCON 포트 (컨테이너 내부 전용) |
+| `rcon.password` | (비움) | 이미지가 기동마다 임의 생성해 채움. 직접 적어도 덮입니다 |
 
 ### 스테이징 플러그인 추가
 

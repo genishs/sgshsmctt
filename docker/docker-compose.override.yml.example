@@ -1,0 +1,20 @@
+# 장비별 메모리 override 템플릿
+#
+# 커밋된 docker-compose.yml 의 MEMORY=28G / mem_limit=30GB 는 RAM 32GB 급 장비 기준이다.
+# 그보다 작은 장비에서는 이 파일을 같은 폴더에 docker-compose.override.yml 로 복사한다.
+# compose 는 그 이름의 파일을 자동으로 겹쳐 읽고, 그 파일은 .gitignore 에 있어 장비마다 다른
+# 값을 가질 수 있다. 적용된 값은 `docker compose config` 로 확인한다.
+#
+#   cp docker-compose.override.yml.example docker-compose.override.yml
+#
+# 아래는 RAM 16GB 장비 기준 실측값(2026-09-04, 힙 6G 로 컨테이너 사용량 4.1GiB / 8GiB, 스왑 0).
+# 8GB 장비라면 MEMORY 3G~4G, mem_limit/memswap_limit 5g~6g 정도.
+#
+# memswap_limit 은 mem_limit 과 같게 둔다 — 컨테이너의 스왑 사용을 0 으로 잠그는 의도된 설정이다.
+# JVM 힙이 스왑으로 밀리면 GC 가 틱 루프를 초~분 단위로 멈추므로, 스왑으로 메모리 부족을 메우지 않는다.
+services:
+  mc:
+    environment:
+      MEMORY: "6G"
+    mem_limit: 8g
+    memswap_limit: 8g
