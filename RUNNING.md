@@ -38,19 +38,24 @@ Windows(Docker Desktop)와 Linux(Docker Engine) 둘 다 다룹니다. 실측 근
 - **Hyper-V / WSL2 를 쓸 수 없는 VM 안(중첩 가상화 미지원)** 에서는 Docker Desktop 이 뜨지
   않습니다. 그런 장비에서는 이 저장소로 서버를 띄울 수 없습니다.
 
-### 메모리 — 장비 사양을 먼저 보세요
+### 메모리 — 기본은 자동입니다
 
-컴포즈 파일에 커밋된 값은 **JVM 힙 28G, 컨테이너 상한 30GB** 입니다. 이 값은 원래 대상 장비
-(RAM 32GB 급) 기준이며, 그보다 작은 장비에서는 **[3.2 메모리 맞추기](#32-메모리-맞추기--32gb-미만-장비는-필수)** 를
-반드시 거쳐야 합니다.
+커밋된 compose 파일은 메모리 값을 고정하지 않습니다. `MEMORY` 가 빈 값이라 **JVM 이 장비 메모리의
+25% 를 최대 힙으로 스스로 잡고**, 컨테이너 상한도 두지 않습니다. 그래서 어느 장비에서 띄워도
+메모리를 넘쳐 죽지 않습니다. 실행 장비가 정해지면 그 장비에 맞춰 값을 고정합니다
+→ [3.2 메모리 값 고정](#32-메모리-값-고정-선택)
 
-| 장비 RAM | 권장 `MEMORY` | 권장 `mem_limit` | 비고 |
-|----------|---------------|------------------|------|
-| 32GB 이상 | `28G` (커밋값 그대로) | 30GB (커밋값 그대로) | override 불필요 |
-| 16GB | `6G` | `8g` | 실측: 힙 6G 로 컨테이너 사용량 4.1GiB, 스왑 0 ([실측 기록](#실측-기록)) |
-| 8GB | `3G`~`4G` | `5g`~`6g` | 소수 인원 기준. 시야 거리(`view-distance`)를 10 정도로 낮추는 것을 권장 |
+| 장비 | 자동일 때 최대 힙 | 고정할 때 권장 `MEMORY` / `mem_limit` |
+|------|-------------------|----------------------------------------|
+| Linux, RAM 32GB 이상 | 약 8G 이상 | `16G` / `20g` |
+| Linux, RAM 16GB | 약 4G | `6G` / `8g` — 실측 컨테이너 사용량 4.1GiB, 스왑 0 ([실측 기록](#실측-기록)) |
+| Linux, RAM 8GB | 약 2G | `3G`~`4G` / `5g`~`6g`, `view-distance` 는 10 정도로 |
+| Windows PC 32GB (Docker Desktop) | 약 4G | WSL VM 이 기본으로 PC RAM 의 절반만 받습니다. `16G` 를 쓰려면 VM 메모리부터 늘립니다([3.2](#32-메모리-값-고정-선택)) |
 
-> 16GB 장비에 28G 를 그대로 두면 **뜨긴 뜹니다**. 다만 JVM 은 `-Xmx` 만 보고 GC 시점을 정하므로
+> **`MEMORY` 줄을 지우거나 주석 처리하지 마세요.** 빈 값과 달리 itzg 이미지 기본값 **1G** 로
+> 고정되어, `view-distance` 30 인 이 서버는 금방 힙이 모자랍니다.
+>
+> 반대로 **장비보다 큰 값을 고정해도 뜨긴 뜹니다.** 다만 JVM 은 `-Xmx` 만 보고 GC 시점을 정하므로
 > 호스트 메모리 압박을 못 느낀 채 자라다가 **한참 뒤에 OOM killer 에 죽습니다.** "처음엔 잘
 > 되다가 몇 시간 뒤 컨테이너가 사라진다"는 증상이 이것입니다.
 
@@ -85,7 +90,7 @@ sgshsmctt/
 ├── README.md                        ← 참고서 (구조·설정·버전 업그레이드·트러블슈팅)
 └── docker/
     ├── docker-compose.yml           ← 서버 정의 (버전·메모리·포트·볼륨)
-    ├── docker-compose.override.yml.example  ← 저사양 장비용 메모리 override 템플릿
+    ├── docker-compose.override.yml.example  ← 장비별 메모리 고정값 템플릿
     ├── server.properties.example    ← 서버 설정 템플릿
     ├── pull-and-up.sh / .bat        ← 최신 이미지 pull 후 기동 (권장 기동 명령)
     ├── plugins/                     ← 직접 넣는 플러그인 jar (기본은 비어 있음)
@@ -137,37 +142,54 @@ cp server.properties.example server.properties
 이 파일은 컨테이너에 읽기·쓰기로 마운트되어 **기동할 때마다 이미지가 정규화해서 다시 씁니다.**
 주석의 타임스탬프가 바뀌고 새 버전에서 추가된 키가 들어오는 것은 정상입니다.
 
-### 3.2 메모리 맞추기 — 32GB 미만 장비는 필수
+### 3.2 메모리 값 고정 (선택)
 
-커밋된 `docker-compose.yml` 은 손대지 않고, **같은 폴더에 `docker-compose.override.yml` 을
-두는 방식**을 씁니다. compose 는 이 이름의 파일이 있으면 자동으로 겹쳐 읽고, 이 파일은
-git 에서 제외되어 장비마다 다른 값을 가질 수 있습니다.
+자동(장비 메모리의 25%)으로 충분하면 건너뜁니다. 값을 고정하는 방법은 두 가지입니다.
+
+- **그 장비에서만 고정.** 같은 폴더에 `docker-compose.override.yml` 을 둡니다. compose 는 이
+  이름의 파일이 있으면 자동으로 겹쳐 읽고, 이 파일은 git 에서 제외되어 장비마다 값이 달라도 됩니다.
+- **모든 장비 공통으로 고정.** `docker-compose.yml` 의 `MEMORY` 를 바꾸고 `mem_limit` /
+  `memswap_limit` 주석을 풉니다. 커밋되는 값이므로 실행 장비가 하나로 정해졌을 때 씁니다.
+
+override 를 쓰는 경우:
 
 ```bash
 cd docker
 cp docker-compose.override.yml.example docker-compose.override.yml
 ```
 
-템플릿 내용(16GB 장비 기준):
+템플릿 내용(RAM 32GB 이상 Linux 기준. 다른 장비 값은 파일 안 주석에 있습니다):
 
 ```yaml
 services:
   mc:
     environment:
-      MEMORY: "6G"
-    mem_limit: 8g
-    memswap_limit: 8g
+      MEMORY: "16G"
+    mem_limit: 20g
+    memswap_limit: 20g
 ```
 
 값의 의미:
 
 - `MEMORY` — JVM 힙(`-Xms`/`-Xmx`). 서버가 실제로 쓰는 메모리의 대부분.
 - `mem_limit` — 컨테이너 전체 상한. 힙 + JVM 자체 + 네이티브 버퍼가 들어가므로 `MEMORY` 보다
-  2GB 정도 여유를 둡니다. 넘으면 OOM killer 가 컨테이너를 죽입니다.
+  25% 정도 여유를 둡니다(itzg 권장). 넘으면 OOM killer 가 컨테이너를 죽입니다.
 - `memswap_limit` — `mem_limit` 과 **같게** 둡니다. 그러면 컨테이너의 스왑 사용량이 0 으로
   잠깁니다. 의도된 설정입니다: GC 는 살아 있는 힙 전체를 훑기 때문에 힙이 스왑으로 밀리면
   틱 루프가 초~분 단위로 멈춥니다. **JVM 힙은 스왑시키지 않습니다.** 스왑을 늘려 메모리
   부족을 메우려 하지 마세요.
+- 자동으로 되돌리려면 override 파일을 지웁니다. `MEMORY` 줄만 지우면 자동이 아니라 1G 가 됩니다.
+
+**Windows(Docker Desktop)에서 큰 값을 쓰려면** WSL VM 메모리부터 늘립니다. 컨테이너는 WSL VM
+안에서 돌고, 이 VM 은 기본으로 PC RAM 의 50% 만 받습니다. 32GB PC 에서 `16G` 를 쓰는 예:
+
+```ini
+# %UserProfile%\.wslconfig
+[wsl2]
+memory=24GB
+```
+
+저장한 뒤 PowerShell 에서 `wsl --shutdown` 을 실행하고 Docker Desktop 을 다시 켭니다.
 
 적용된 값 확인 (기동 전에 해 보세요):
 
@@ -175,11 +197,8 @@ services:
 docker compose config | grep -E "MEMORY|mem_limit|memswap_limit"
 ```
 
-```
-      MEMORY: "6G"
-    mem_limit: "8589934592"
-    memswap_limit: "8589934592"
-```
+`MEMORY` 가 빈 값이면 자동입니다. override 를 뒀다면 그 값과 `mem_limit` / `memswap_limit` 이
+함께 보여야 합니다.
 
 ### 3.3 (선택) 플러그인 직접 추가
 
@@ -296,8 +315,11 @@ docker ps --filter name=mc-crossplay --format "{{.Status}}"
 docker stats --no-stream mc-crossplay
 ```
 
-`MEM USAGE / LIMIT` 이 상한의 70% 를 꾸준히 넘으면 `MEMORY` 를 줄이거나 `mem_limit` 을 늘립니다.
-힙 6G 기준 실측은 4.1GiB / 8GiB 였습니다.
+`MEM USAGE` 가 실제 사용량입니다. 상한을 두지 않은 자동 상태에서는 `LIMIT` 칸에 Docker 가 쓸 수
+있는 메모리 전체가 보입니다. 렉이 심하거나 로그에 `java.lang.OutOfMemoryError: Java heap space` 가
+보이면 힙이 모자란 것이므로 값을 고정해 늘립니다([3.2](#32-메모리-값-고정-선택)). 값을 고정했다면
+`MEM USAGE / LIMIT` 이 상한의 70% 를 꾸준히 넘을 때 `mem_limit` 을 늘립니다. 힙 6G 기준 실측은
+4.1GiB / 8GiB 였습니다.
 
 ---
 
@@ -445,8 +467,9 @@ docker compose start
 |------|------|------|
 | `no configuration file provided` | `docker/` 밖에서 `docker compose` 실행 | `cd docker` 또는 `pull-and-up` 사용 |
 | 뜨자마자 죽고 `server.properties` 가 **폴더**로 생김 | 3.1 을 건너뜀 | `down` → 폴더 삭제 → 템플릿 복사 → `up -d` |
-| `OOMKilled=true` (`docker inspect mc-crossplay --format "{{.State.OOMKilled}}"`) | `MEMORY`/`mem_limit` 이 장비를 초과 | override 로 둘 다 낮춤([3.2](#32-메모리-맞추기--32gb-미만-장비는-필수)) |
+| `OOMKilled=true` (`docker inspect mc-crossplay --format "{{.State.OOMKilled}}"`) | 고정한 `MEMORY`/`mem_limit` 이 장비를 초과 | 둘 다 낮추거나 override 를 지워 자동으로 되돌림([3.2](#32-메모리-값-고정-선택)) |
 | 몇 시간 뒤 컨테이너가 사라짐 | 위와 같음. 부팅은 되지만 힙이 자라다 죽는 것 | 위와 같음 |
+| 렉이 심하고 로그에 `OutOfMemoryError: Java heap space` | 힙 부족. `MEMORY` 줄이 지워져 1G 가 됐거나, 작은 장비에서 자동값(25%)이 모자람 | `MEMORY: ""` 인지 확인하고, 모자라면 값을 고정해 늘림 |
 | 종료코드 137 인데 `OOMKilled=false` | 외부에서 정지(`docker stop`, Docker Desktop 종료) | 다시 `up -d` |
 | `Resolved Purpur version ... 실패` | `VERSION` 을 Purpur 가 아직 지원 안 함 | Purpur 가 지원하는 버전으로 되돌림 |
 | `[Script]` 요약에 `✗ 미설치` | 다운로드 실패(회선·API 장애) | `docker compose restart` 로 재시도. Geyser 없이도 Java 는 정상 |
@@ -477,5 +500,5 @@ docker compose start
 | 일자 | 장비 | 결과 |
 |------|------|------|
 | 2026-09-04 | Linux VM (Ubuntu, RAM 15.9G + swap 3.8G, Docker Engine) | Purpur 26.2-2632 `Done (17.795s)`. Geyser 2.11.2 / floodgate 2.2.5 / ViaVersion 5.11.0 자동 설치. Bedrock 클라이언트가 같은 LAN 에서 UDP 19132 로 접속·플레이 확인. override 로 `MEMORY=6G`, `mem_limit=memswap_limit=8g` 적용 시 컨테이너 사용량 **4.1GiB / 8GiB, 스왑 0**. |
-| 2026-09-04 | 같은 장비 | 커밋값 `MEMORY=28G` 그대로도 `java -Xms28g -Xmx28g -version` 은 exit 0 — 즉 **뜬다**. `vm.overcommit_memory=1` + `USE_AIKAR_FLAGS` 기본 off(`AlwaysPreTouch` 없음)라 힙을 미리 만지지 않기 때문. 문제는 기동이 아니라 그 뒤의 성장. |
+| 2026-09-04 | 같은 장비 | 당시 커밋값 `MEMORY=28G` 그대로도 `java -Xms28g -Xmx28g -version` 은 exit 0 — 즉 **뜬다**. `vm.overcommit_memory=1` + `USE_AIKAR_FLAGS` 기본 off(`AlwaysPreTouch` 없음)라 힙을 미리 만지지 않기 때문. 문제는 기동이 아니라 그 뒤의 성장. |
 | 2026-09-04 | 같은 장비 | `docker run -m 2g --memory-swap 2g` → `memory.swap.max=0`. `memswap_limit == mem_limit` 은 스왑을 0 으로 잠근다(의도). |
