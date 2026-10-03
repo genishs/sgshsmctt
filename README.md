@@ -2,6 +2,10 @@
 
 Docker 기반 마인크래프트 서버입니다. Java Edition과 Bedrock Edition 플레이어가 동일한 서버에서 함께 플레이할 수 있도록 설계되어 있으며, 서버 시작 시 플러그인을 자동으로 최신 버전으로 받아옵니다.
 
+> **처음 띄우는 분은 [RUNNING.md](RUNNING.md) 부터.** 빈 장비에서 접속까지를 순서대로 따라가는
+> 절차서입니다(Windows·Linux, 메모리, 접속, 콘솔, 백업, 문제 해결표). 이 README 는 구조와
+> 설정을 설명하는 참고서입니다. 서버를 켜고 끄는 일은 [래퍼 스크립트](#래퍼-스크립트) 한 줄이면 됩니다.
+
 ---
 
 ## 목차
@@ -9,13 +13,14 @@ Docker 기반 마인크래프트 서버입니다. Java Edition과 Bedrock Editio
 1. [요구사항](#요구사항)
 2. [구조](#구조)
 3. [빠른 시작](#빠른-시작)
-4. [플러그인 자동 설치 로직](#플러그인-자동-설치-로직)
-5. [설정](#설정)
-6. [포트](#포트)
-7. [버전 업그레이드](#버전-업그레이드)
-8. [백업](#백업)
-9. [클라이언트 버전 호환](#클라이언트-버전-호환)
-10. [트러블슈팅](#트러블슈팅)
+4. [래퍼 스크립트](#래퍼-스크립트)
+5. [플러그인 자동 설치 로직](#플러그인-자동-설치-로직)
+6. [설정](#설정)
+7. [포트](#포트)
+8. [버전 업그레이드](#버전-업그레이드)
+9. [백업](#백업)
+10. [클라이언트 버전 호환](#클라이언트-버전-호환)
+11. [트러블슈팅](#트러블슈팅)
 
 ---
 
@@ -24,9 +29,10 @@ Docker 기반 마인크래프트 서버입니다. Java Edition과 Bedrock Editio
 - **Docker Desktop** (Windows / macOS) 또는 Docker Engine (Linux)
 - **Git** (저장소 클론 시)
 - PowerShell 또는 bash 쉘
-- **메모리**: 현재 `MEMORY=28G`, 컨테이너 상한 30GB로 설정되어 있습니다. 사양이 낮은
-  머신에서는 [docker-compose.yml](docker/docker-compose.yml)의 `MEMORY`와 `mem_limit`을
-  먼저 낮춰야 합니다.
+- **메모리**: 값을 고정하지 않고 **JVM 자동**으로 둡니다. `MEMORY` 가 빈 값이라 JVM 이 장비
+  메모리의 25% 를 최대 힙으로 잡으므로, 어느 장비에서 띄워도 메모리를 넘쳐 죽지 않습니다.
+  실행 장비가 정해지면 값을 고정합니다(RAM 32GB 이상 장비 기준 `16G`). 실측으로는 힙 6G 면
+  소수 인원 플레이에 충분했습니다(컨테이너 사용량 4.1GiB). → [메모리와 override](#메모리와-override)
 - **디스크**: 월드 데이터 기준 수 GB + 백업본. 서버 jar와 라이브러리는 매 버전 업그레이드마다
   새로 받습니다.
 
@@ -38,31 +44,60 @@ Docker 기반 마인크래프트 서버입니다. Java Edition과 Bedrock Editio
 sgshsmctt/
 ├── docker/
 │   ├── docker-compose.yml        # 서버 컨테이너 정의 (버전·메모리·포트·볼륨)
+│   ├── docker-compose.override.yml          # 장비별 메모리 override — git 제외
+│   ├── docker-compose.override.yml.example  # 위 파일의 템플릿 (RAM 32GB 이상 기준 16G)
 │   ├── server.properties         # 실제 서버 설정 — git 제외 (비밀값 포함)
 │   ├── server.properties.example # 위 파일의 템플릿 (비밀값만 비어 있음)
+│   ├── mc.sh                     # 서버 관리 래퍼 — 켜기·끄기·로그·콘솔·백업 (Linux/macOS)
+│   ├── mc.bat                    # 같은 래퍼 (Windows)
 │   ├── pull-and-up.sh            # 최신 이미지 pull 후 서버 기동 (Linux/macOS)
 │   ├── pull-and-up.bat           # 최신 이미지 pull 후 서버 기동 (Windows)
 │   ├── plugins/                  # 스테이징 플러그인 폴더 (jar 직접 배치 시 사용)
 │   ├── scripts/
 │   │   └── update-plugins.sh     # 서버 기동 전 플러그인 자동 설치 스크립트
+│   ├── backups/                  # 래퍼 backup 이 만드는 월드 tar — git 제외
 │   └── data/                     # 런타임 데이터 — git 제외
 ├── .github/
 │   └── copilot-instructions.md   # AI 에이전트용 프로젝트 가이드
 ├── LICENSE
-└── README.md
+├── README.md                     # 이 문서 — 구조·설정 참고서
+└── RUNNING.md                    # 실행 절차서 — 빈 장비에서 접속까지
 ```
 
 git에서 제외되는 항목 ([.gitignore](.gitignore)):
 
 | 경로 | 이유 |
 |------|------|
-| `docker/data/` | 월드·로그·유저 데이터 등 런타임 데이터. 서버 jar와 백업 tar도 여기 쌓입니다 |
+| `docker/data/` | 월드·로그·유저 데이터 등 런타임 데이터. 서버 jar도 여기 쌓입니다 |
+| `docker/backups/` | 래퍼 `backup` 이 만드는 월드 tar |
 | `docker/server.properties` | rcon 비밀번호 등 비밀값 포함. 서버가 기동할 때마다 이 파일을 다시 씁니다 |
+| `docker/docker-compose.override.yml` | 장비별 메모리 값. 커밋된 compose 를 건드리지 않고 겹쳐 씁니다 |
 | `docker/plugins/*.jar` | 기동 시 자동 다운로드되므로 저장소에 담지 않음 |
+| `.idea/` | IDE 설정 |
 
 ---
 
 ## 빠른 시작
+
+아래는 요약입니다. 단계별 설명·확인 방법·접속·운영은 [RUNNING.md](RUNNING.md) 에 있습니다.
+
+### 래퍼로 켜기 (권장)
+
+저장소 어디서든 한 줄로 켭니다. `server.properties` 가 없으면 예시 파일에서 만들어 줍니다.
+
+**Linux / macOS:**
+```bash
+bash docker/mc.sh up        # 켜기
+bash docker/mc.sh logs      # 기동 로그 보기 (Ctrl+C 로 빠져나와도 서버는 계속 돈다)
+```
+
+**Windows:**
+```bat
+docker\mc.bat up
+docker\mc.bat logs
+```
+
+나머지 명령은 [래퍼 스크립트](#래퍼-스크립트)에 있습니다. 아래는 래퍼 없이 compose 로 직접 다루는 방법입니다.
 
 ### 최초 1회: 설정 파일 준비
 
@@ -75,6 +110,9 @@ cd docker
 copy server.properties.example server.properties
 ```
 
+메모리는 기본이 JVM 자동이라 따로 준비할 것이 없습니다. 장비에 맞춰 값을 고정하려면
+→ [메모리와 override](#메모리와-override)
+
 ### 일반 시작
 
 ```powershell
@@ -82,10 +120,11 @@ cd docker
 docker compose up -d
 ```
 
-### 최신 이미지로 시작 (권장)
+### 최신 이미지로 시작
 
 itzg 이미지를 최신으로 갱신하고 참조를 잃은 구버전 이미지를 정리한 뒤 서버를 기동합니다.
 두 스크립트 모두 자기 위치로 이동한 뒤 compose를 실행하므로 **저장소 루트에서 실행해도** 됩니다.
+래퍼의 `update` 명령이 이 스크립트를 부릅니다.
 
 **Linux / macOS:**
 ```bash
@@ -110,6 +149,38 @@ docker logs -f mc-crossplay
 ```
 Done (XX.XXXs)! For help, type "help"
 ```
+
+---
+
+## 래퍼 스크립트
+
+[docker/mc.sh](docker/mc.sh)(Linux/macOS)와 [docker/mc.bat](docker/mc.bat)(Windows)은 docker compose
+명령을 외우지 않아도 서버를 다룰 수 있게 한 얇은 래퍼입니다. 하는 일은 전부 `docker compose` /
+`docker exec` 호출이고, 두 스크립트 모두 자기 위치로 이동한 뒤 실행하므로 저장소 어디서 실행해도
+됩니다. 명령은 두 스크립트가 같습니다.
+
+```bash
+bash docker/mc.sh <명령> [인자...]      # Linux / macOS
+docker\mc.bat <명령> [인자...]          # Windows
+```
+
+| 명령 | 하는 일 | 직접 하면 (`docker/` 안에서) |
+|------|---------|------------------------------|
+| `up` | 켜기. `server.properties` 가 없으면 예시에서 만들고, 폴더로 잘못 생겨 있으면 멈추고 알려 줌 | `docker compose up -d` |
+| `update` | 최신 itzg 이미지를 받은 뒤 켜기 | `pull-and-up.sh` / `.bat` |
+| `stop` | 월드 저장 후 끄기. 재부팅해도 다시 뜨지 않음 | `docker compose stop` |
+| `start` | `stop` 으로 꺼 둔 서버 켜기 | `docker compose start` |
+| `restart` | 재시작. 플러그인이 최신으로 재설치됨 | `docker compose restart` |
+| `down` | 컨테이너 제거. 월드는 남음 | `docker compose down` |
+| `status` | 상태, 메모리 설정, 메모리 사용량 | `docker compose ps` + `docker stats` |
+| `logs` | 로그 따라가기. `Ctrl+C` 로 빠져나와도 서버는 계속 돎 | `docker logs -f mc-crossplay` |
+| `console` | 서버 콘솔. `exit` 를 입력하면 나옴 | `docker exec -i mc-crossplay rcon-cli` |
+| `cmd <명령>` | 서버 명령 한 줄. 예: `cmd op 닉네임` | `docker exec mc-crossplay rcon-cli <명령>` |
+| `backup` | 켜져 있으면 잠시 멈추고, 월드를 네더·엔드까지 `docker/backups/` 에 tar 로 묶은 뒤 다시 켬 | [백업](#백업) |
+
+- `mc.bat` 의 안내 문구는 영어입니다. cmd.exe 가 배치 파일 속 한글을 깨뜨리기 때문에 배치 파일은
+  ASCII 로만 씁니다.
+- `cmd` 에 `&`, `|`, `<`, `>` 같은 특수문자가 든 명령은 셸이 먼저 해석하므로 `console` 에서 넣습니다.
 
 ---
 
@@ -222,7 +293,7 @@ Geyser가 미설치면 베드락 접속만 불가하고 Java 접속은 정상입
 |------|--------|------|
 | `TYPE` | `PURPUR` | 서버 타입. PURPUR, PAPER 등 지원 |
 | `VERSION` | `26.2` | 마인크래프트 버전 — **고정값이라 직접 올려야 최신이 됩니다** |
-| `MEMORY` | `28G` | JVM 힙 메모리 (서버 사양에 맞게 조정) |
+| `MEMORY` | `""` (빈 값) | JVM 힙. 빈 값이면 JVM 자동(장비 메모리의 25%). **줄을 지우면 1G 가 됩니다** → [메모리와 override](#메모리와-override) |
 | `EULA` | `TRUE` | Minecraft EULA 동의 (변경 불가) |
 
 컨테이너 자체 설정:
@@ -231,8 +302,66 @@ Geyser가 미설치면 베드락 접속만 불가하고 Java 접속은 정상입
 |------|--------|------|
 | `image` | `itzg/minecraft-server:latest` | `docker compose pull` 시 최신 이미지 자동 취득 |
 | `restart` | `unless-stopped` | 크래시 시 자동 복구. 단 **명시적으로 stop한 컨테이너는 재부팅 후에도 자동 기동되지 않습니다** |
-| `mem_limit` | `30000000000` (30GB) | 컨테이너 메모리 상한. `MEMORY`보다 여유 있게 설정 |
+| `mem_limit` | 주석 처리 (상한 없음) | 컨테이너 메모리 상한. `MEMORY` 를 고정할 때 힙 + 25% 로 함께 풉니다(예: `20g`) |
+| `memswap_limit` | 주석 처리 | 풀 때는 `mem_limit` 과 같게 둬서 컨테이너 스왑을 **0 으로 잠급니다**(의도). JVM 힙은 스왑시키지 않습니다 |
+| `tty` / `stdin_open` | `true` | `docker attach` 로 서버 콘솔에 직접 붙을 수 있게 함 |
 | `entrypoint` | `update-plugins.sh && /start` | 기본 `/start`를 가로채 플러그인 설치를 먼저 수행 |
+
+### 메모리와 override
+
+**기본은 JVM 자동입니다.** 실행 장비가 정해질 때까지 값을 고정하지 않습니다. itzg 이미지는
+`MEMORY` 를 `-Xms`/`-Xmx` 로 바꿔 JVM 에 넘기는데, 값의 상태에 따라 동작이 다릅니다.
+
+| `MEMORY` | 최대 힙 | 쓰는 때 |
+|----------|---------|---------|
+| 빈 값 `""` (현재) | 컨테이너 상한의 25%. 상한이 없으면 Docker 가 쓸 수 있는 메모리의 25% | 장비 미정이거나 넉넉한 장비 |
+| 줄 삭제·주석 | **1G 고정** (itzg 기본값) | 쓰지 않습니다. 이 서버에는 부족합니다 |
+| `"16G"` 같은 고정값 | 그 값 | 장비가 정해졌을 때. `mem_limit` / `memswap_limit` 도 같이 둡니다 |
+| `"50%"` 같은 비율 | 상한(없으면 장비 메모리)의 그 비율 | 장비마다 자동으로 맞추되 25% 보다 크게 쓰고 싶을 때 |
+
+Windows(Docker Desktop)는 컨테이너가 WSL VM 안에서 돌고, 이 VM 이 기본으로 PC RAM 의 50% 만
+받습니다. 그래서 자동이면 PC RAM 의 약 12.5% 가 힙이 됩니다(32GB PC 에서 약 4G).
+
+값을 고정하는 방법은 둘입니다. 커밋된 `docker-compose.yml` 을 바꾸면 모든 장비에 적용되고,
+**같은 폴더의 `docker-compose.override.yml`** 을 두면 그 장비에만 적용됩니다. compose 가 그 이름을
+자동으로 겹쳐 읽고, 파일은 git 에서 제외되어 있어 장비마다 값이 달라도 됩니다.
+
+```bash
+cd docker
+cp docker-compose.override.yml.example docker-compose.override.yml   # RAM 32GB 이상 기준 16G / 20g
+docker compose config | grep -E "MEMORY|mem_limit|memswap_limit"      # 적용값 확인
+```
+
+| 장비 | `MEMORY` | `mem_limit` = `memswap_limit` |
+|------|----------|-------------------------------|
+| Linux, RAM 32GB 이상 | `16G` | `20g` |
+| Linux, RAM 16GB | `6G` | `8g` — 실측 컨테이너 사용량 4.1GiB, 스왑 0 (2026-09-04) |
+| Linux, RAM 8GB | `3G`~`4G` | `5g`~`6g` — `view-distance` 도 10 정도로 |
+| Windows PC | 위와 같음 | 먼저 `%UserProfile%\.wslconfig` 의 `[wsl2]` 에 `memory=` 를 `mem_limit` 보다 크게 (32GB PC 에서 `16G` 를 쓰려면 `24GB`) |
+
+알아 둘 것 두 가지:
+
+- **장비보다 큰 고정값도 「뜹니다」.** Linux 기본(`vm.overcommit_memory` 허용) + itzg 기본
+  (`USE_AIKAR_FLAGS` off → `AlwaysPreTouch` 없음)이라 힙을 미리 만지지 않습니다. 문제는 그 뒤입니다.
+  JVM 은 `-Xmx` 만 보고 GC 시점을 정하므로 호스트 압박을 못 느낀 채 자라다가 RAM+swap 벽에서
+  OOM killer 에 죽습니다. "몇 시간 잘 되다가 컨테이너가 사라진다"가 이 증상입니다.
+- **스왑으로 메우지 마세요.** `memswap_limit == mem_limit` 은 스왑을 0 으로 잠그는 의도된 설정입니다.
+  풀어 주더라도 GC 가 살아 있는 힙 전체를 훑기 때문에 힙이 스왑에 올라가면 20 TPS 틱 루프가
+  초~분 단위로 멈춥니다. 부족하면 `MEMORY` 를 줄이는 것이 답입니다.
+
+### 서버 콘솔 접근
+
+```bash
+bash docker/mc.sh console                      # 래퍼 — 대화형 (Windows: docker\mc.bat console)
+bash docker/mc.sh cmd op 닉네임                 # 래퍼 — 한 줄
+docker exec -i mc-crossplay rcon-cli          # 대화형 (exit 를 입력하면 나옴)
+docker exec mc-crossplay rcon-cli op 닉네임    # 한 줄
+docker attach mc-crossplay                     # 콘솔 직결 — 나올 때 Ctrl+P Ctrl+Q (Ctrl+C 는 서버 종료)
+```
+
+`rcon-cli` 는 이미지가 기동마다 임의 생성해 `server.properties` 에 써넣는 rcon 비밀번호를
+알아서 읽습니다. 직접 적어 둔 `rcon.password` 는 덮이므로 비워 두고, 고정 비밀번호가 꼭 필요할 때만
+override 파일에 `RCON_PASSWORD` 환경변수를 둡니다.
 
 ### server.properties 주요 설정
 
@@ -249,6 +378,7 @@ git에서는 제외되어 있습니다.
 | `view-distance` | `30` | 시야 거리 (청크) |
 | `level-name` | `2026sgshs` | 월드 폴더명. 바꾸면 **새 월드가 생성**됩니다 |
 | `rcon.port` | `25575` | RCON 포트 (컨테이너 내부 전용) |
+| `rcon.password` | (비움) | 이미지가 기동마다 임의 생성해 채움. 직접 적어도 덮입니다 |
 
 ### 스테이징 플러그인 추가
 
@@ -332,22 +462,34 @@ docker logs mc-crossplay 2>&1 | grep "This server is running"
 
 ## 백업
 
-월드 데이터는 `docker/data/<level-name>/`에 있습니다. 서버를 **정지한 상태에서** 압축합니다.
-기동 중에 뜨면 저장 중인 청크가 섞여 백업이 깨질 수 있습니다.
+월드 데이터는 `docker/data/<level-name>/`에 있습니다. Purpur 같은 Bukkit 계열 서버는 **네더와 엔드를
+`<level-name>_nether/`, `<level-name>_the_end/` 폴더에 따로** 두므로 셋을 함께 묶어야 합니다.
+서버를 **정지한 상태에서** 압축합니다. 기동 중에 뜨면 저장 중인 청크가 섞여 백업이 깨질 수 있습니다.
+
+래퍼가 이 과정을 한 번에 합니다. 켜져 있던 서버만 다시 켜고, tar 가 실패해도 서버는 다시 켭니다.
+
+```bash
+bash docker/mc.sh backup      # Windows: docker\mc.bat backup
+# → docker/backups/2026sgshs-YYYYMMDD-HHMMSS.tar
+```
+
+직접 하려면:
 
 ```bash
 cd docker
 docker compose stop
+mkdir -p backups
 
 cd data
-tar -cf b<이름><YYYYMMDD><NN>.tar 2026sgshs   # 예: bsgshs2026072601.tar
+tar -cf ../backups/2026sgshs-$(date +%Y%m%d-%H%M%S).tar 2026sgshs*   # _nether, _the_end 까지
 
 cd ..
-docker compose up -d
+docker compose start
 ```
 
-백업 tar는 `docker/data/` 안에 두면 git에서 자동 제외됩니다. 다만 같은 디스크에 있으므로
-디스크 장애에는 대비되지 않습니다 — 중요한 시점의 백업은 외부로 복사해 두세요.
+`docker/backups/` 는 git에서 자동 제외됩니다. 다만 같은 디스크에 있으므로 디스크 장애에는
+대비되지 않습니다 — 중요한 시점의 백업은 외부로 복사해 두세요. 예전 방식대로 `docker/data/` 안에
+만들어 둔 백업 tar 도 그대로 쓸 수 있습니다.
 
 ---
 
@@ -362,11 +504,13 @@ docker compose up -d
 | Java 26.1.2 이하 (구버전) | ❌ 접속 불가 | ViaBackwards 필요 (미설치) |
 | Bedrock | ✅ 접속 가능 | Geyser + floodgate, UDP 19132 |
 
-설치된 플러그인:
+설치되는 플러그인 — 버전을 고정하지 않고 **기동할 때마다 그 시점의 최신**을 받습니다. 아래 버전은
+2026-09-04 실측 기동 때 받은 것으로, 지금 받으면 더 새로울 수 있습니다. 실제 설치 결과는 기동
+로그의 `[Script]` 요약과 `/data/plugins/` 에서 확인합니다.
 
-| 플러그인 | 버전 | 역할 |
-|---------|------|------|
-| Geyser-Spigot | 2.11.0 | Bedrock 프로토콜 ↔ Java 프로토콜 변환 |
+| 플러그인 | 2026-09-04 실측 | 역할 |
+|---------|-----------------|------|
+| Geyser-Spigot | 2.11.2 | Bedrock 프로토콜 ↔ Java 프로토콜 변환 |
 | floodgate | 2.2.5 | Bedrock 플레이어 인증 (정품 Java 계정 불필요) |
 | ViaVersion | 5.11.0 | 서버보다 **새로운** Java 클라이언트 접속 허용 |
 
@@ -403,7 +547,10 @@ docker logs mc-crossplay
 docker inspect mc-crossplay --format "{{.State.ExitCode}} OOMKilled={{.State.OOMKilled}}"
 ```
 
-- `OOMKilled=true` → `MEMORY` / `mem_limit`이 머신 사양을 초과. 둘 다 낮추세요
+- `OOMKilled=true` → 고정한 `MEMORY` / `mem_limit`이 머신 사양을 초과. 둘 다 낮추거나 override 를
+  지워 자동으로 되돌리세요 → [메모리와 override](#메모리와-override)
+- 로그에 `OutOfMemoryError: Java heap space` → 힙 부족. `MEMORY` 줄이 지워져 1G 가 됐는지 보고,
+  모자라면 값을 고정해 늘리세요
 - 종료 코드 `137` + `OOMKilled=false` → 외부에서 정지시킨 것 (`docker stop`, Docker Desktop 종료 등)
 - `Resolved Purpur version ...` 에서 실패 → `VERSION`을 Purpur가 아직 지원하지 않음
   → [버전 업그레이드](#버전-업그레이드)의 지원 여부 확인 절차 참조
@@ -411,12 +558,13 @@ docker inspect mc-crossplay --format "{{.State.ExitCode}} OOMKilled={{.State.OOM
 ### 컴포즈 실행 시 `no configuration file provided`
 
 `docker compose` 명령을 `docker/` 폴더 밖에서 실행한 경우입니다. `cd docker` 후 실행하거나,
-어느 위치에서나 동작하는 `pull-and-up` 스크립트를 사용하세요.
+어느 위치에서나 동작하는 [래퍼 스크립트](#래퍼-스크립트)나 `pull-and-up` 스크립트를 사용하세요.
 
 ### server.properties 자리에 폴더가 생김
 
 `docker/server.properties`가 없는 상태로 컨테이너를 띄우면 docker가 그 경로에 **빈 디렉터리를
 생성**하고 서버가 정상 기동되지 않습니다. 디렉터리를 지우고 템플릿을 복사한 뒤 다시 띄우세요.
+래퍼 `up` 은 파일이 없으면 템플릿을 대신 복사하고, 이미 폴더가 생겨 있으면 기동하지 않고 알려 줍니다.
 
 ```powershell
 cd docker
@@ -453,8 +601,10 @@ docker logs mc-crossplay 2>&1 | Select-String "Geyser"
 
 ### 서버 재시작
 
-```powershell
-cd docker
+```bash
+bash docker/mc.sh restart     # 래퍼 (Windows: docker\mc.bat restart)
+
+cd docker                     # 직접 하려면
 docker compose restart
 ```
 

@@ -12,7 +12,17 @@ services:
       EULA: "TRUE"
       TYPE: "PURPUR"
       VERSION: "26.2"
-      MEMORY: "28G"
+
+      # ── 메모리(JVM 힙) ─────────────────────────────────────────────
+      # 실행 장비가 정해질 때까지 JVM 이 스스로 정하게 둔다.
+      #   빈 값("")    : itzg 가 -Xms/-Xmx 를 넘기지 않는다. JVM 이 최대 힙을
+      #                  컨테이너 상한의 25% 로 잡고, 상한이 없으면 Docker 가 쓸 수 있는
+      #                  메모리 전체의 25% 로 잡는다(Windows 는 WSL VM 메모리 = PC RAM 의 50%).
+      #   줄 삭제·주석 : 빈 값과 다르다! itzg 기본값 1G 로 고정되는데,
+      #                  view-distance 30 인 이 서버에는 부족하다.
+      #   고정값       : 장비가 정해지면 바꾼다. RAM 32GB 이상 장비 기준 "16G".
+      #                  이때 아래 mem_limit / memswap_limit 도 같이 푼다.
+      MEMORY: ""
 
     volumes:
       - ./data:/data
@@ -28,5 +38,13 @@ services:
       - "bash /data/scripts/update-plugins.sh && /start"
 
     restart: unless-stopped
-    mem_limit: 30000000000
-    memswap_limit: 30000000000
+
+    # ── 컨테이너 메모리 상한 ─────────────────────────────────────────
+    # 지금은 두지 않는다(Docker 기본값 = 상한 없음). MEMORY 가 빈 값이면 이 상한이
+    # 힙 계산의 기준이 되므로, 비워 둬야 장비 전체 메모리를 기준으로 잡힌다.
+    # MEMORY 를 "16G" 로 고정할 때 두 줄을 같이 푼다.
+    #   mem_limit     : 힙 + 25% 여유(itzg 권장). 넘으면 OOM killer 가 컨테이너를 죽인다.
+    #   memswap_limit : mem_limit 과 같게 둬서 스왑을 0 으로 잠근다.
+    #                   힙이 스왑에 밀리면 GC 가 틱 루프를 초 단위로 멈춘다.
+    # mem_limit: 20g
+    # memswap_limit: 20g

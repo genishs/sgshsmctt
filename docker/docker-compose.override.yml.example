@@ -1,0 +1,27 @@
+# 장비별 메모리 고정값 템플릿
+#
+# 커밋된 docker-compose.yml 은 메모리를 JVM 자동(장비 메모리의 25%)으로 둔다.
+# 특정 장비에서만 값을 고정하고 싶으면 이 파일을 같은 폴더에 docker-compose.override.yml 로 복사한다.
+# compose 는 그 이름의 파일을 자동으로 겹쳐 읽고, 그 파일은 .gitignore 에 있어 장비마다 다른 값을
+# 가질 수 있다. 적용된 값은 `docker compose config` 로 확인한다.
+#
+#   cp docker-compose.override.yml.example docker-compose.override.yml
+#
+# 아래 값은 RAM 32GB 이상 Linux 장비 기준이다.
+#   - RAM 16GB 장비 : MEMORY "6G", mem_limit/memswap_limit 8g
+#                     (2026-09-04 실측: 컨테이너 사용량 4.1GiB / 8GiB, 스왑 0)
+#   - RAM 8GB 장비  : MEMORY "3G"~"4G", mem_limit/memswap_limit 5g~6g, view-distance 10 정도로
+#   - Windows(Docker Desktop) : WSL VM 이 기본으로 PC RAM 의 50% 만 받는다. 32GB PC 에서 16G 를 쓰려면
+#                     %UserProfile%\.wslconfig 의 [wsl2] 에 memory=24GB 를 넣고 `wsl --shutdown` 후 재시작.
+#
+# 규칙
+#   - mem_limit 은 MEMORY + 25% 여유. 넘으면 OOM killer 가 컨테이너를 죽인다.
+#   - memswap_limit 은 mem_limit 과 같게 둔다. 컨테이너의 스왑 사용을 0 으로 잠그는 의도된 설정이다.
+#     JVM 힙이 스왑으로 밀리면 GC 가 틱 루프를 초 단위로 멈추므로, 스왑으로 메모리 부족을 메우지 않는다.
+#   - MEMORY 줄을 지우면 자동이 아니라 itzg 기본값 1G 가 된다. 자동으로 되돌리려면 이 파일을 지운다.
+services:
+  mc:
+    environment:
+      MEMORY: "16G"
+    mem_limit: 20g
+    memswap_limit: 20g
