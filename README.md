@@ -150,6 +150,10 @@ docker logs -f mc-crossplay
 Done (XX.XXXs)! For help, type "help"
 ```
 
+Geyser 도 `[Geyser-Spigot] Done (...)!` 줄을 서버보다 먼저 찍으므로, 기동 완료는 `For help, type "help"` 가
+붙은 줄로 판단합니다. 한국어 Windows 에서 `[Script]` 줄의 한글이 깨져 보이면 PowerShell 에서
+`[Console]::OutputEncoding = [Text.Encoding]::UTF8` 을 실행한 뒤 다시 봅니다.
+
 ---
 
 ## 래퍼 스크립트
@@ -320,7 +324,7 @@ Geyser가 미설치면 베드락 접속만 불가하고 Java 접속은 정상입
 | `"50%"` 같은 비율 | 상한(없으면 장비 메모리)의 그 비율 | 장비마다 자동으로 맞추되 25% 보다 크게 쓰고 싶을 때 |
 
 Windows(Docker Desktop)는 컨테이너가 WSL VM 안에서 돌고, 이 VM 이 기본으로 PC RAM 의 50% 만
-받습니다. 그래서 자동이면 PC RAM 의 약 12.5% 가 힙이 됩니다(32GB PC 에서 약 4G).
+받습니다. 그래서 자동이면 PC RAM 의 약 12.5% 가 힙이 됩니다(32GB PC 에서 약 4G, 16GB PC 에서 실측 1.93G).
 
 값을 고정하는 방법은 둘입니다. 커밋된 `docker-compose.yml` 을 바꾸면 모든 장비에 적용되고,
 **같은 폴더의 `docker-compose.override.yml`** 을 두면 그 장비에만 적용됩니다. compose 가 그 이름을
@@ -542,7 +546,8 @@ docker logs mc-crossplay
 ```
 
 로그에서 `[Script]` 접두사가 붙은 줄을 찾아 플러그인 설치 단계를 확인합니다.
-기동 완료까지 보통 40~80초 걸리며, 그 사이 헬스체크는 `unhealthy`로 표시됩니다.
+기동 완료까지 SSD 장비는 재기동 기준 1분 안팎, **HDD 장비는 재기동도 수 분, 첫 기동은 약 20분**
+걸리며(2026-10-03 실측), 그 사이 헬스체크는 `unhealthy`로 표시됩니다. 로그가 계속 올라오고 있으면 정상입니다.
 
 컨테이너가 곧바로 죽는다면:
 
@@ -579,7 +584,8 @@ docker compose up -d
 
 ### 접속 불가 (Java Edition)
 
-1. 서버가 완전히 기동됐는지 확인: `Done (XX.XXXs)!` 메시지 확인
+1. 서버가 완전히 기동됐는지 확인: `Done (XX.XXXs)! For help, type "help"` 메시지 확인
+   (Geyser 의 `Done` 줄이 먼저 찍히므로 `For help` 가 붙은 줄을 봅니다)
 2. 포트 25565가 열려있는지 확인
 3. `online-mode=true`인 경우 정품 계정으로 접속
 4. **클라이언트가 서버보다 구버전이면 접속되지 않습니다** →
