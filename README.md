@@ -4,7 +4,7 @@ Docker 기반 마인크래프트 서버입니다. Java Edition과 Bedrock Editio
 
 > **처음 띄우는 분은 [RUNNING.md](RUNNING.md) 부터.** 빈 장비에서 접속까지를 순서대로 따라가는
 > 절차서입니다(Windows·Linux, 메모리, 접속, 콘솔, 백업, 문제 해결표). 이 README 는 구조와
-> 설정을 설명하는 참고서입니다.
+> 설정을 설명하는 참고서입니다. 서버를 켜고 끄는 일은 [래퍼 스크립트](#래퍼-스크립트) 한 줄이면 됩니다.
 
 ---
 
@@ -13,13 +13,14 @@ Docker 기반 마인크래프트 서버입니다. Java Edition과 Bedrock Editio
 1. [요구사항](#요구사항)
 2. [구조](#구조)
 3. [빠른 시작](#빠른-시작)
-4. [플러그인 자동 설치 로직](#플러그인-자동-설치-로직)
-5. [설정](#설정)
-6. [포트](#포트)
-7. [버전 업그레이드](#버전-업그레이드)
-8. [백업](#백업)
-9. [클라이언트 버전 호환](#클라이언트-버전-호환)
-10. [트러블슈팅](#트러블슈팅)
+4. [래퍼 스크립트](#래퍼-스크립트)
+5. [플러그인 자동 설치 로직](#플러그인-자동-설치-로직)
+6. [설정](#설정)
+7. [포트](#포트)
+8. [버전 업그레이드](#버전-업그레이드)
+9. [백업](#백업)
+10. [클라이언트 버전 호환](#클라이언트-버전-호환)
+11. [트러블슈팅](#트러블슈팅)
 
 ---
 
@@ -47,11 +48,14 @@ sgshsmctt/
 │   ├── docker-compose.override.yml.example  # 위 파일의 템플릿 (RAM 32GB 이상 기준 16G)
 │   ├── server.properties         # 실제 서버 설정 — git 제외 (비밀값 포함)
 │   ├── server.properties.example # 위 파일의 템플릿 (비밀값만 비어 있음)
+│   ├── mc.sh                     # 서버 관리 래퍼 — 켜기·끄기·로그·콘솔·백업 (Linux/macOS)
+│   ├── mc.bat                    # 같은 래퍼 (Windows)
 │   ├── pull-and-up.sh            # 최신 이미지 pull 후 서버 기동 (Linux/macOS)
 │   ├── pull-and-up.bat           # 최신 이미지 pull 후 서버 기동 (Windows)
 │   ├── plugins/                  # 스테이징 플러그인 폴더 (jar 직접 배치 시 사용)
 │   ├── scripts/
 │   │   └── update-plugins.sh     # 서버 기동 전 플러그인 자동 설치 스크립트
+│   ├── backups/                  # 래퍼 backup 이 만드는 월드 tar — git 제외
 │   └── data/                     # 런타임 데이터 — git 제외
 ├── .github/
 │   └── copilot-instructions.md   # AI 에이전트용 프로젝트 가이드
@@ -64,7 +68,8 @@ git에서 제외되는 항목 ([.gitignore](.gitignore)):
 
 | 경로 | 이유 |
 |------|------|
-| `docker/data/` | 월드·로그·유저 데이터 등 런타임 데이터. 서버 jar와 백업 tar도 여기 쌓입니다 |
+| `docker/data/` | 월드·로그·유저 데이터 등 런타임 데이터. 서버 jar도 여기 쌓입니다 |
+| `docker/backups/` | 래퍼 `backup` 이 만드는 월드 tar |
 | `docker/server.properties` | rcon 비밀번호 등 비밀값 포함. 서버가 기동할 때마다 이 파일을 다시 씁니다 |
 | `docker/docker-compose.override.yml` | 장비별 메모리 값. 커밋된 compose 를 건드리지 않고 겹쳐 씁니다 |
 | `docker/plugins/*.jar` | 기동 시 자동 다운로드되므로 저장소에 담지 않음 |
@@ -75,6 +80,24 @@ git에서 제외되는 항목 ([.gitignore](.gitignore)):
 ## 빠른 시작
 
 아래는 요약입니다. 단계별 설명·확인 방법·접속·운영은 [RUNNING.md](RUNNING.md) 에 있습니다.
+
+### 래퍼로 켜기 (권장)
+
+저장소 어디서든 한 줄로 켭니다. `server.properties` 가 없으면 예시 파일에서 만들어 줍니다.
+
+**Linux / macOS:**
+```bash
+bash docker/mc.sh up        # 켜기
+bash docker/mc.sh logs      # 기동 로그 보기 (Ctrl+C 로 빠져나와도 서버는 계속 돈다)
+```
+
+**Windows:**
+```bat
+docker\mc.bat up
+docker\mc.bat logs
+```
+
+나머지 명령은 [래퍼 스크립트](#래퍼-스크립트)에 있습니다. 아래는 래퍼 없이 compose 로 직접 다루는 방법입니다.
 
 ### 최초 1회: 설정 파일 준비
 
@@ -97,10 +120,11 @@ cd docker
 docker compose up -d
 ```
 
-### 최신 이미지로 시작 (권장)
+### 최신 이미지로 시작
 
 itzg 이미지를 최신으로 갱신하고 참조를 잃은 구버전 이미지를 정리한 뒤 서버를 기동합니다.
 두 스크립트 모두 자기 위치로 이동한 뒤 compose를 실행하므로 **저장소 루트에서 실행해도** 됩니다.
+래퍼의 `update` 명령이 이 스크립트를 부릅니다.
 
 **Linux / macOS:**
 ```bash
@@ -125,6 +149,38 @@ docker logs -f mc-crossplay
 ```
 Done (XX.XXXs)! For help, type "help"
 ```
+
+---
+
+## 래퍼 스크립트
+
+[docker/mc.sh](docker/mc.sh)(Linux/macOS)와 [docker/mc.bat](docker/mc.bat)(Windows)은 docker compose
+명령을 외우지 않아도 서버를 다룰 수 있게 한 얇은 래퍼입니다. 하는 일은 전부 `docker compose` /
+`docker exec` 호출이고, 두 스크립트 모두 자기 위치로 이동한 뒤 실행하므로 저장소 어디서 실행해도
+됩니다. 명령은 두 스크립트가 같습니다.
+
+```bash
+bash docker/mc.sh <명령> [인자...]      # Linux / macOS
+docker\mc.bat <명령> [인자...]          # Windows
+```
+
+| 명령 | 하는 일 | 직접 하면 (`docker/` 안에서) |
+|------|---------|------------------------------|
+| `up` | 켜기. `server.properties` 가 없으면 예시에서 만들고, 폴더로 잘못 생겨 있으면 멈추고 알려 줌 | `docker compose up -d` |
+| `update` | 최신 itzg 이미지를 받은 뒤 켜기 | `pull-and-up.sh` / `.bat` |
+| `stop` | 월드 저장 후 끄기. 재부팅해도 다시 뜨지 않음 | `docker compose stop` |
+| `start` | `stop` 으로 꺼 둔 서버 켜기 | `docker compose start` |
+| `restart` | 재시작. 플러그인이 최신으로 재설치됨 | `docker compose restart` |
+| `down` | 컨테이너 제거. 월드는 남음 | `docker compose down` |
+| `status` | 상태, 메모리 설정, 메모리 사용량 | `docker compose ps` + `docker stats` |
+| `logs` | 로그 따라가기. `Ctrl+C` 로 빠져나와도 서버는 계속 돎 | `docker logs -f mc-crossplay` |
+| `console` | 서버 콘솔. `exit` 를 입력하면 나옴 | `docker exec -i mc-crossplay rcon-cli` |
+| `cmd <명령>` | 서버 명령 한 줄. 예: `cmd op 닉네임` | `docker exec mc-crossplay rcon-cli <명령>` |
+| `backup` | 켜져 있으면 잠시 멈추고, 월드를 네더·엔드까지 `docker/backups/` 에 tar 로 묶은 뒤 다시 켬 | [백업](#백업) |
+
+- `mc.bat` 의 안내 문구는 영어입니다. cmd.exe 가 배치 파일 속 한글을 깨뜨리기 때문에 배치 파일은
+  ASCII 로만 씁니다.
+- `cmd` 에 `&`, `|`, `<`, `>` 같은 특수문자가 든 명령은 셸이 먼저 해석하므로 `console` 에서 넣습니다.
 
 ---
 
@@ -296,6 +352,8 @@ docker compose config | grep -E "MEMORY|mem_limit|memswap_limit"      # 적용�
 ### 서버 콘솔 접근
 
 ```bash
+bash docker/mc.sh console                      # 래퍼 — 대화형 (Windows: docker\mc.bat console)
+bash docker/mc.sh cmd op 닉네임                 # 래퍼 — 한 줄
 docker exec -i mc-crossplay rcon-cli          # 대화형 (exit 를 입력하면 나옴)
 docker exec mc-crossplay rcon-cli op 닉네임    # 한 줄
 docker attach mc-crossplay                     # 콘솔 직결 — 나올 때 Ctrl+P Ctrl+Q (Ctrl+C 는 서버 종료)
@@ -404,22 +462,34 @@ docker logs mc-crossplay 2>&1 | grep "This server is running"
 
 ## 백업
 
-월드 데이터는 `docker/data/<level-name>/`에 있습니다. 서버를 **정지한 상태에서** 압축합니다.
-기동 중에 뜨면 저장 중인 청크가 섞여 백업이 깨질 수 있습니다.
+월드 데이터는 `docker/data/<level-name>/`에 있습니다. Purpur 같은 Bukkit 계열 서버는 **네더와 엔드를
+`<level-name>_nether/`, `<level-name>_the_end/` 폴더에 따로** 두므로 셋을 함께 묶어야 합니다.
+서버를 **정지한 상태에서** 압축합니다. 기동 중에 뜨면 저장 중인 청크가 섞여 백업이 깨질 수 있습니다.
+
+래퍼가 이 과정을 한 번에 합니다. 켜져 있던 서버만 다시 켜고, tar 가 실패해도 서버는 다시 켭니다.
+
+```bash
+bash docker/mc.sh backup      # Windows: docker\mc.bat backup
+# → docker/backups/2026sgshs-YYYYMMDD-HHMMSS.tar
+```
+
+직접 하려면:
 
 ```bash
 cd docker
 docker compose stop
+mkdir -p backups
 
 cd data
-tar -cf b<이름><YYYYMMDD><NN>.tar 2026sgshs   # 예: bsgshs2026072601.tar
+tar -cf ../backups/2026sgshs-$(date +%Y%m%d-%H%M%S).tar 2026sgshs*   # _nether, _the_end 까지
 
 cd ..
-docker compose up -d
+docker compose start
 ```
 
-백업 tar는 `docker/data/` 안에 두면 git에서 자동 제외됩니다. 다만 같은 디스크에 있으므로
-디스크 장애에는 대비되지 않습니다 — 중요한 시점의 백업은 외부로 복사해 두세요.
+`docker/backups/` 는 git에서 자동 제외됩니다. 다만 같은 디스크에 있으므로 디스크 장애에는
+대비되지 않습니다 — 중요한 시점의 백업은 외부로 복사해 두세요. 예전 방식대로 `docker/data/` 안에
+만들어 둔 백업 tar 도 그대로 쓸 수 있습니다.
 
 ---
 
@@ -486,12 +556,13 @@ docker inspect mc-crossplay --format "{{.State.ExitCode}} OOMKilled={{.State.OOM
 ### 컴포즈 실행 시 `no configuration file provided`
 
 `docker compose` 명령을 `docker/` 폴더 밖에서 실행한 경우입니다. `cd docker` 후 실행하거나,
-어느 위치에서나 동작하는 `pull-and-up` 스크립트를 사용하세요.
+어느 위치에서나 동작하는 [래퍼 스크립트](#래퍼-스크립트)나 `pull-and-up` 스크립트를 사용하세요.
 
 ### server.properties 자리에 폴더가 생김
 
 `docker/server.properties`가 없는 상태로 컨테이너를 띄우면 docker가 그 경로에 **빈 디렉터리를
 생성**하고 서버가 정상 기동되지 않습니다. 디렉터리를 지우고 템플릿을 복사한 뒤 다시 띄우세요.
+래퍼 `up` 은 파일이 없으면 템플릿을 대신 복사하고, 이미 폴더가 생겨 있으면 기동하지 않고 알려 줍니다.
 
 ```powershell
 cd docker
@@ -528,8 +599,10 @@ docker logs mc-crossplay 2>&1 | Select-String "Geyser"
 
 ### 서버 재시작
 
-```powershell
-cd docker
+```bash
+bash docker/mc.sh restart     # 래퍼 (Windows: docker\mc.bat restart)
+
+cd docker                     # 직접 하려면
 docker compose restart
 ```
 

@@ -92,7 +92,8 @@ sgshsmctt/
     ├── docker-compose.yml           ← 서버 정의 (버전·메모리·포트·볼륨)
     ├── docker-compose.override.yml.example  ← 장비별 메모리 고정값 템플릿
     ├── server.properties.example    ← 서버 설정 템플릿
-    ├── pull-and-up.sh / .bat        ← 최신 이미지 pull 후 기동 (권장 기동 명령)
+    ├── mc.sh / mc.bat               ← 서버 관리 래퍼: 켜기·끄기·로그·콘솔·백업 (권장)
+    ├── pull-and-up.sh / .bat        ← 최신 이미지 pull 후 기동 (래퍼의 update 가 호출)
     ├── plugins/                     ← 직접 넣는 플러그인 jar (기본은 비어 있음)
     └── scripts/update-plugins.sh    ← 기동 시 Geyser·Floodgate·ViaVersion 자동 설치
 ```
@@ -118,7 +119,8 @@ cp server.properties.example server.properties
 ```
 
 이 파일이 **없는 채로 기동하면 docker 가 같은 이름의 빈 디렉터리를 만들어** 서버가 뜨지 않습니다.
-이미 그렇게 됐다면 [문제 해결 요약표](#9-문제-해결-요약표)를 보세요.
+이미 그렇게 됐다면 [문제 해결 요약표](#9-문제-해결-요약표)를 보세요. 래퍼로 켜면(`mc up`) 파일이
+없을 때 예시에서 대신 만들어 주고, 폴더로 잘못 생겨 있으면 기동하지 않고 알려 줍니다.
 
 바꿀 만한 항목만 추리면:
 
@@ -212,26 +214,50 @@ Geyser·Floodgate·ViaVersion 은 매 기동마다 자동으로 최신을 받으
 
 세 가지 방법이 있고, 어느 것이든 결과는 같습니다.
 
-### 방법 A — pull-and-up 스크립트 (권장)
+### 방법 A — 래퍼 스크립트 (권장)
 
-최신 itzg 이미지를 받고, 참조를 잃은 구 이미지를 정리한 뒤 기동합니다.
-**저장소 루트에서 실행해도 됩니다** (스크립트가 스스로 `docker/` 로 이동).
+`docker/mc.sh`(Linux/macOS)와 `docker/mc.bat`(Windows)이 docker compose 명령을 감쌉니다.
+**저장소 어디서 실행해도 됩니다** (스크립트가 스스로 `docker/` 로 이동).
 
 ```bash
 # Linux / macOS
-bash docker/pull-and-up.sh
+bash docker/mc.sh up          # 켜기
+bash docker/mc.sh update      # 최신 itzg 이미지를 받은 뒤 켜기
 ```
 
 ```bat
 :: Windows (cmd / PowerShell)
-docker\pull-and-up.bat
+docker\mc.bat up
+docker\mc.bat update
 ```
+
+`update` 는 최신 이미지를 받고 참조를 잃은 구 이미지를 정리한 뒤 기동합니다. 기존
+`pull-and-up` 스크립트를 그대로 부르는 것이고, 마인크래프트 **버전은 바꾸지 않습니다.**
+
+#### 래퍼 명령 한눈에
+
+| 명령 | 하는 일 |
+|------|---------|
+| `up` | 켜기. `server.properties` 가 없으면 예시에서 만든다 |
+| `update` | 최신 이미지를 받은 뒤 켜기 |
+| `stop` / `start` | 끄기 / 다시 켜기. `stop` 한 서버는 재부팅 후 자동으로 뜨지 않는다 |
+| `restart` | 재시작. 플러그인이 최신으로 재설치된다 |
+| `down` | 컨테이너 제거. 월드는 남는다 |
+| `status` | 상태, 메모리 설정, 메모리 사용량 |
+| `logs` | 로그 따라가기. `Ctrl+C` 로 빠져나와도 서버는 계속 돈다 |
+| `console` | 서버 콘솔. `exit` 를 입력하면 나온다 |
+| `cmd <명령>` | 서버 명령 한 줄. 예: `cmd op 닉네임` |
+| `backup` | 잠시 멈추고 월드를 `docker/backups/` 에 tar 로 묶은 뒤 다시 켠다 |
+
+`mc.bat` 의 안내 문구는 영어입니다. cmd.exe 가 배치 파일 속 한글을 깨뜨리기 때문에 배치 파일은
+ASCII 로만 씁니다.
 
 ### 방법 B — compose 직접
 
 ```bash
 cd docker
-docker compose up -d
+docker compose up -d          # 켜기
+bash pull-and-up.sh           # 최신 이미지를 받은 뒤 켜기 (Windows 는 pull-and-up.bat)
 ```
 
 `docker/` 폴더 **안에서** 실행해야 합니다. 밖에서 하면 `no configuration file provided` 가 납니다.
@@ -254,8 +280,11 @@ docker compose up -d
 ### 5.1 로그 따라가기
 
 ```bash
-docker logs -f mc-crossplay
+bash docker/mc.sh logs        # Windows: docker\mc.bat logs
+docker logs -f mc-crossplay   # 직접 하려면
 ```
+
+`Ctrl+C` 로 빠져나와도 서버는 계속 돕니다.
 
 순서대로 이런 것이 보여야 합니다.
 
@@ -300,10 +329,11 @@ docker logs -f mc-crossplay
 [ViaVersion] ViaVersion does not have any compatible versions for this server version!
 ```
 
-### 5.2 상태 한 줄 확인
+### 5.2 상태 확인
 
 ```bash
-docker ps --filter name=mc-crossplay --format "{{.Status}}"
+bash docker/mc.sh status      # 상태 + 메모리 설정 + 메모리 사용량. Windows: docker\mc.bat status
+docker ps --filter name=mc-crossplay --format "{{.Status}}"   # 직접 하려면
 ```
 
 `Up 2 minutes (healthy)` 가 목표입니다. 기동 중 40~80초 동안은 `(health: starting)` 또는
@@ -375,10 +405,25 @@ New-NetFirewallRule -DisplayName "Minecraft Bedrock" -Direction Inbound -Protoco
 
 ### 7.1 서버 콘솔에 명령 넣기
 
-**rcon-cli (권장).** 이미지에 들어 있고, 임의 생성된 rcon 비밀번호를 알아서 읽습니다.
+**래퍼 (권장).** 이미지에 든 rcon-cli 를 부르며, 임의 생성된 rcon 비밀번호를 알아서 읽습니다.
 
 ```bash
-# 대화형 콘솔 (나올 때는 Ctrl+D 또는 exit)
+bash docker/mc.sh console                 # 대화형 콘솔 (exit 를 입력하면 나옴)
+bash docker/mc.sh cmd op 플레이어이름      # 한 줄 실행
+bash docker/mc.sh cmd say 5분 뒤 재시작합니다
+```
+
+```bat
+docker\mc.bat console
+docker\mc.bat cmd op PlayerName
+```
+
+`&`, `|`, `<`, `>` 같은 특수문자가 든 명령은 셸이 먼저 해석하므로 `console` 에서 넣으세요.
+
+**rcon-cli 직접.** 래퍼가 하는 일과 같습니다.
+
+```bash
+# 대화형 콘솔 (나올 때는 exit)
 docker exec -i mc-crossplay rcon-cli
 
 # 한 줄 실행
@@ -398,37 +443,64 @@ Bedrock 플레이어를 op 할 때는 닉네임 앞의 `.` 까지 포함합니�
 
 ### 7.2 정지 / 재시작 / 재생성
 
-| 하고 싶은 것 | 명령 (`docker/` 안에서) | 비고 |
-|--------------|-------------------------|------|
-| 잠시 멈춤 | `docker compose stop` | 월드 저장 후 종료. **재부팅 후 자동으로 뜨지 않음** |
-| 다시 켬 | `docker compose start` 또는 `up -d` | |
-| 재시작 | `docker compose restart` | 엔트리포인트가 다시 돌아 **플러그인이 최신으로 재설치됨** |
-| compose 파일 바꾼 뒤 | `docker compose up -d --force-recreate` | `restart` 는 바뀐 설정을 반영하지 않음 |
-| 컨테이너 제거 | `docker compose down` | `docker/data/` 의 월드는 호스트에 남음 |
-| 이미지까지 최신화 | `bash docker/pull-and-up.sh` / `docker\pull-and-up.bat` | 마인크래프트 **버전은 안 바뀜** |
+| 하고 싶은 것 | 래퍼 | 직접 (`docker/` 안에서) | 비고 |
+|--------------|------|-------------------------|------|
+| 잠시 멈춤 | `mc stop` | `docker compose stop` | 월드 저장 후 종료. **재부팅 후 자동으로 뜨지 않음** |
+| 다시 켬 | `mc start` | `docker compose start` 또는 `up -d` | |
+| 재시작 | `mc restart` | `docker compose restart` | 엔트리포인트가 다시 돌아 **플러그인이 최신으로 재설치됨** |
+| compose 파일 바꾼 뒤 | `mc down` 후 `mc up` | `docker compose up -d --force-recreate` | `restart` 는 바뀐 설정을 반영하지 않음 |
+| 컨테이너 제거 | `mc down` | `docker compose down` | `docker/data/` 의 월드는 호스트에 남음 |
+| 이미지까지 최신화 | `mc update` | `bash pull-and-up.sh` / `pull-and-up.bat` | 마인크래프트 **버전은 안 바뀜** |
+
+표의 `mc` 는 Linux 에서 `bash docker/mc.sh`, Windows 에서 `docker\mc.bat` 입니다.
 
 ### 7.3 백업
 
-월드는 `docker/data/<level-name>/` 입니다. **정지한 상태에서** 묶습니다. 기동 중에 뜨면
-저장 중인 청크가 섞여 깨질 수 있습니다.
+월드는 `docker/data/<level-name>/` 입니다. Purpur 같은 Bukkit 계열 서버는 **네더와 엔드를
+`<level-name>_nether/`, `<level-name>_the_end/` 폴더에 따로** 두므로 셋을 함께 묶어야 합니다.
+**정지한 상태에서** 묶습니다. 기동 중에 뜨면 저장 중인 청크가 섞여 깨질 수 있습니다.
+
+**래퍼 (권장).** 서버가 켜져 있으면 잠시 멈추고, 세 폴더를 묶은 뒤, 다시 켭니다. tar 가 실패해도
+서버는 다시 켭니다.
+
+```bash
+bash docker/mc.sh backup      # Windows: docker\mc.bat backup
+```
+
+```
+[mc] 저장 중인 청크가 섞이지 않도록 서버를 잠시 멈춥니다...
+[mc] 백업: 2026sgshs 2026sgshs_nether 2026sgshs_the_end → docker/backups/2026sgshs-20261003-213000.tar
+[mc] 서버를 다시 켭니다...
+[mc] ✓ 완료: docker/backups/2026sgshs-20261003-213000.tar (1.2G)
+```
+
+**직접 하려면:**
 
 ```bash
 cd docker
 docker compose stop
-tar -C data -cf data/bsgshs$(date +%Y%m%d)01.tar 2026sgshs
+mkdir -p backups
+cd data
+tar -cf ../backups/2026sgshs-$(date +%Y%m%d-%H%M%S).tar 2026sgshs*   # _nether, _the_end 까지
+cd ..
 docker compose start
 ```
 
 ```powershell
-# Windows
+# Windows PowerShell
 cd docker
 docker compose stop
-tar -C data -cf data\bsgshs$(Get-Date -Format yyyyMMdd)01.tar 2026sgshs
+mkdir backups -Force
+$dirs = (Get-ChildItem data -Directory -Filter '2026sgshs*').Name
+tar -C data -cf "backups\2026sgshs-$(Get-Date -Format yyyyMMdd-HHmmss).tar" $dirs
 docker compose start
 ```
 
-`docker/data/` 안에 두면 git 에서 자동 제외되지만 같은 디스크입니다. 중요한 시점의 백업은
-바깥으로 복사하세요. 버전 업그레이드 전에는 **반드시** 백업합니다(월드 변환은 되돌릴 수 없음).
+`docker/backups/` 는 git 에서 제외되지만 같은 디스크입니다. 중요한 시점의 백업은 바깥으로
+복사하세요. 버전 업그레이드 전에는 **반드시** 백업합니다(월드 변환은 되돌릴 수 없음). 예전 방식대로
+`docker/data/` 안에 만들어 둔 백업 tar 도 그대로 쓸 수 있습니다.
+
+Linux 에서 파일 권한 때문에 tar 가 실패하면 `sudo bash docker/mc.sh backup` 으로 다시 실행합니다.
 
 ### 7.4 버전 올리기
 
@@ -465,8 +537,9 @@ docker compose start
 
 | 증상 | 원인 | 조치 |
 |------|------|------|
-| `no configuration file provided` | `docker/` 밖에서 `docker compose` 실행 | `cd docker` 또는 `pull-and-up` 사용 |
-| 뜨자마자 죽고 `server.properties` 가 **폴더**로 생김 | 3.1 을 건너뜀 | `down` → 폴더 삭제 → 템플릿 복사 → `up -d` |
+| `no configuration file provided` | `docker/` 밖에서 `docker compose` 실행 | `cd docker` 하거나, 어디서나 되는 래퍼(`mc.sh` / `mc.bat`) 사용 |
+| 뜨자마자 죽고 `server.properties` 가 **폴더**로 생김 | 3.1 을 건너뜀. 래퍼 `up` 은 이 상태면 멈추고 알려 줌 | `down` → 폴더 삭제 → 템플릿 복사 → `up -d` |
+| `mc backup` 이 tar 오류로 실패 (Linux) | `docker/data/` 파일 권한 | `sudo bash docker/mc.sh backup`. 서버는 실패해도 다시 켜져 있음 |
 | `OOMKilled=true` (`docker inspect mc-crossplay --format "{{.State.OOMKilled}}"`) | 고정한 `MEMORY`/`mem_limit` 이 장비를 초과 | 둘 다 낮추거나 override 를 지워 자동으로 되돌림([3.2](#32-메모리-값-고정-선택)) |
 | 몇 시간 뒤 컨테이너가 사라짐 | 위와 같음. 부팅은 되지만 힙이 자라다 죽는 것 | 위와 같음 |
 | 렉이 심하고 로그에 `OutOfMemoryError: Java heap space` | 힙 부족. `MEMORY` 줄이 지워져 1G 가 됐거나, 작은 장비에서 자동값(25%)이 모자람 | `MEMORY: ""` 인지 확인하고, 모자라면 값을 고정해 늘림 |
@@ -476,7 +549,7 @@ docker compose start
 | Geyser `does not support the Java version that Geyser requires` | 서버 버전이 Geyser 요구보다 낮음 | 버전 업그레이드 |
 | 클라이언트 `Outdated client` | 클라이언트가 서버(26.2)보다 오래됨 | 클라이언트 업데이트(ViaBackwards 미설치) |
 | Bedrock 만 안 됨 | UDP 를 TCP 로 열었거나 Geyser 미설치 | 19132 **UDP** 확인, 로그의 `Started Geyser` 확인 |
-| 첫 기동이 5분 넘게 걸림 | 이미지·jar·월드 생성 | 정상. `docker logs -f` 로 진행 확인 |
+| 첫 기동이 5분 넘게 걸림 | 이미지·jar·월드 생성 | 정상. `mc logs` 로 진행 확인 |
 
 ---
 

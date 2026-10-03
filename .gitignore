@@ -17,8 +17,12 @@ docker/.docker/
 
 # Claude Code 설정
 .claude/
+
 # 장비별 메모리 override (docker-compose.override.yml.example 을 복사해 사용)
 docker/docker-compose.override.yml
 
 # IDE 설정
 .idea/
+
+# 래퍼 backup 명령이 만드는 월드 백업 tar
+docker/backups/
