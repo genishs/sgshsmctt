@@ -462,11 +462,14 @@ docker logs mc-crossplay 2>&1 | grep "This server is running"
 
 ## 백업
 
-월드 데이터는 `docker/data/<level-name>/`에 있습니다. Purpur 같은 Bukkit 계열 서버는 **네더와 엔드를
-`<level-name>_nether/`, `<level-name>_the_end/` 폴더에 따로** 두므로 셋을 함께 묶어야 합니다.
+월드 데이터는 `docker/data/<level-name>/`에 있습니다. 26.x 부터는 **네더와 엔드도 이 폴더 안
+`dimensions/minecraft/` 아래에 함께 저장**되므로 이 폴더 하나만 묶으면 됩니다(Purpur 26.2 실측).
+1.21 이하의 Bukkit 계열 서버는 네더·엔드를 `<level-name>_nether/`, `<level-name>_the_end/` 폴더에 따로
+두었으므로, 그 시절 월드라 이 폴더가 남아 있다면 함께 묶습니다.
 서버를 **정지한 상태에서** 압축합니다. 기동 중에 뜨면 저장 중인 청크가 섞여 백업이 깨질 수 있습니다.
 
-래퍼가 이 과정을 한 번에 합니다. 켜져 있던 서버만 다시 켜고, tar 가 실패해도 서버는 다시 켭니다.
+래퍼가 이 과정을 한 번에 합니다. 예전 형식 폴더가 있으면 함께 묶고, 켜져 있던 서버만 다시 켜며,
+tar 가 실패해도 서버는 다시 켭니다.
 
 ```bash
 bash docker/mc.sh backup      # Windows: docker\mc.bat backup
@@ -481,7 +484,7 @@ docker compose stop
 mkdir -p backups
 
 cd data
-tar -cf ../backups/2026sgshs-$(date +%Y%m%d-%H%M%S).tar 2026sgshs*   # _nether, _the_end 까지
+tar -cf ../backups/2026sgshs-$(date +%Y%m%d-%H%M%S).tar 2026sgshs*   # 예전 형식 _nether, _the_end 가 있으면 함께
 
 cd ..
 docker compose start
