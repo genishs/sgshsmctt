@@ -51,6 +51,7 @@ Windows(Docker Desktop)와 Linux(Docker Engine) 둘 다 다룹니다. 실측 근
 | Linux, RAM 16GB | 약 4G | `6G` / `8g` — 실측 컨테이너 사용량 4.1GiB, 스왑 0 ([실측 기록](#실측-기록)) |
 | Linux, RAM 8GB | 약 2G | `3G`~`4G` / `5g`~`6g`, `view-distance` 는 10 정도로 |
 | Windows PC 32GB (Docker Desktop) | 약 4G | WSL VM 이 기본으로 PC RAM 의 절반만 받습니다. `16G` 를 쓰려면 VM 메모리부터 늘립니다([3.2](#32-메모리-값-고정-선택)) |
+| Windows PC 16GB (Docker Desktop) | 1.93G (실측) | 접속자가 많아 모자라면 `.wslconfig` 로 VM 메모리를 늘린 뒤 값을 고정합니다 |
 
 > **`MEMORY` 줄을 지우거나 주석 처리하지 마세요.** 빈 값과 달리 itzg 이미지 기본값 **1G** 로
 > 고정되어, `view-distance` 30 인 이 서버는 금방 힙이 모자랍니다.
@@ -270,8 +271,15 @@ bash pull-and-up.sh           # 최신 이미지를 받은 뒤 켜기 (Windows �
 
 ### 첫 기동은 오래 걸립니다
 
-첫 기동은 이미지(수백 MB) + Purpur 서버 jar + 라이브러리 + 플러그인을 전부 받고 월드를
-새로 생성하므로 **회선에 따라 수 분** 걸립니다. 두 번째부터는 40~80초입니다.
+첫 기동은 이미지(약 1.3GB) + Purpur 서버 jar + 라이브러리 + 플러그인을 전부 받고 서버 jar 를
+패치한 뒤 월드를 새로 생성하므로 오래 걸립니다. **디스크가 HDD 면 훨씬 더 걸립니다.**
+
+| 장비 (2026-10-03 실측) | 첫 기동, 이미지 받기 포함 | 재기동 |
+|------------------------|---------------------------|--------|
+| Linux, SSD | 약 3분 30초 | 35~50초 |
+| Windows Docker Desktop, HDD | 약 20분 | 약 7분 |
+
+로그가 계속 올라오고 있으면 정상이니 기다립니다.
 
 ---
 
@@ -285,6 +293,13 @@ docker logs -f mc-crossplay   # 직접 하려면
 ```
 
 `Ctrl+C` 로 빠져나와도 서버는 계속 돕니다.
+
+한국어 Windows 에서 `[Script]` 줄의 한글이 깨져 보이면, 로그는 UTF-8 인데 셸이 CP949 로 읽은
+것입니다. PowerShell 에서 다음을 실행한 뒤 다시 봅니다(PowerShell 7·5.1 에서 확인).
+
+```powershell
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
+```
 
 순서대로 이런 것이 보여야 합니다.
 
@@ -306,23 +321,27 @@ docker logs -f mc-crossplay   # 직접 하려면
 **② 서버 jar 준비** — itzg 이미지
 
 ```
-[init] Resolved Purpur version 26.2 to build 2632
+[mc-image-helper] ..:..:.. INFO  : Resolved Purpur version 26.2 build 2633
 ```
 
-**③ 서버 기동 완료**
-
-```
-[..:..:.. INFO]: This server is running Purpur version 26.2-2632-...
-[..:..:.. INFO]: Done (17.795s)! For help, type "help"
-```
-
-**④ Geyser 대기** — Bedrock 접속을 받을 준비
+**③ Geyser 준비** — Bedrock 접속을 받을 준비
 
 ```
 [..:..:.. INFO]: [Geyser-Spigot] Started Geyser on UDP port 19132
+[..:..:.. INFO]: [Geyser-Spigot] Done (2.063s)! Run /geyser help for help!
 ```
 
-`Done` 뒤에 뜨는 다음 경고는 **정상**이며 무시합니다(서버가 최신이라 변환해 줄 더 새로운
+**④ 서버 기동 완료**
+
+```
+[..:..:.. INFO]: This server is running Purpur version 26.2-2633-...
+[..:..:.. INFO]: Done (17.064s)! For help, type "help"
+```
+
+Geyser 도 `Done` 줄을 서버보다 먼저 찍습니다. **서버 기동 완료는 `For help, type "help"` 가 붙은
+줄로 판단합니다.** 로그를 `Done` 으로만 찾으면 Geyser 줄에 먼저 걸립니다.
+
+서버 기동 뒤 뜨는 다음 경고는 **정상**이며 무시합니다(서버가 최신이라 변환해 줄 더 새로운
 클라이언트가 없다는 뜻):
 
 ```
@@ -336,8 +355,8 @@ bash docker/mc.sh status      # 상태 + 메모리 설정 + 메모리 사용량.
 docker ps --filter name=mc-crossplay --format "{{.Status}}"   # 직접 하려면
 ```
 
-`Up 2 minutes (healthy)` 가 목표입니다. 기동 중 40~80초 동안은 `(health: starting)` 또는
-`(unhealthy)` 로 보이는 것이 정상입니다.
+`Up 2 minutes (healthy)` 가 목표입니다. 기동하는 동안(SSD 는 1분 안팎, HDD 는 수 분 이상)은
+`(health: starting)` 또는 `(unhealthy)` 로 보이는 것이 정상이고, 서버 기동이 끝나면 healthy 로 바뀝니다.
 
 ### 5.3 메모리 실제 사용량
 
@@ -387,7 +406,7 @@ ViaBackwards 가 없어서 접속되지 않습니다.
 
 | 증상 | 확인 |
 |------|------|
-| Java 만 안 붙음 | 로그에 `Done` 이 떴는지 → 클라이언트가 26.2 이상인지 → 방화벽 25565/TCP |
+| Java 만 안 붙음 | 로그에 `Done (...)! For help` 가 떴는지 → 클라이언트가 26.2 이상인지 → 방화벽 25565/TCP |
 | Bedrock 만 안 붙음 | 로그에 `Started Geyser on UDP port 19132` 가 있는지 → **UDP** 로 열었는지 → Geyser `✗ 미설치` 아닌지 |
 | 둘 다 안 붙음 | `docker ps` 에 컨테이너가 있는지 → 호스트 IP 가 맞는지 → Windows 방화벽에서 Docker Desktop 백엔드 인바운드 허용 |
 | 인터넷에서 안 붙음 | 공유기 포트 포워딩 25565/TCP, 19132/UDP → 공인 IP 로 접속 |
@@ -557,7 +576,8 @@ Linux 에서 파일 권한 때문에 tar 가 실패하면 `sudo bash docker/mc.s
 | Geyser `does not support the Java version that Geyser requires` | 서버 버전이 Geyser 요구보다 낮음 | 버전 업그레이드 |
 | 클라이언트 `Outdated client` | 클라이언트가 서버(26.2)보다 오래됨 | 클라이언트 업데이트(ViaBackwards 미설치) |
 | Bedrock 만 안 됨 | UDP 를 TCP 로 열었거나 Geyser 미설치 | 19132 **UDP** 확인, 로그의 `Started Geyser` 확인 |
-| 첫 기동이 5분 넘게 걸림 | 이미지·jar·월드 생성 | 정상. `mc logs` 로 진행 확인 |
+| 첫 기동이 오래 걸림 (HDD 는 약 20분) | 이미지·jar 받기와 패치, 월드 생성. HDD 는 디스크가 병목 | 로그가 계속 올라오면 정상. `mc logs` 로 진행 확인 |
+| 로그의 `[Script]` 한글이 깨짐 (한국어 Windows) | UTF-8 로그를 셸이 CP949 로 읽음 | PowerShell 에서 `[Console]::OutputEncoding = [Text.Encoding]::UTF8` 실행 후 다시 보기 |
 
 ---
 
@@ -586,3 +606,5 @@ Linux 에서 파일 권한 때문에 tar 가 실패하면 `sudo bash docker/mc.s
 | 2026-10-03 | Linux VM (Ubuntu 24.04, RAM 31G, Docker Engine 29.8.1, Compose v5.5.1) | 새로 클론한 저장소에서 `mc.sh up` 으로 기동. 이미지 pull 포함 첫 기동 약 3분 30초, `Done (17.064s)`. Purpur 26.2-2633, Java 25. 재시작은 약 35~50초. |
 | 2026-10-03 | 같은 장비 | `MEMORY: ""` 이면 실제 서버 프로세스가 `java -jar /data/purpur-26.2-2633.jar` 로 **힙 옵션 없이** 뜬다. 같은 컨테이너에서 JVM 이 정한 최대 힙 7.82GiB = 31.29GiB 의 25%, 대기 중 사용량 1.6GiB. `MEMORY` 줄을 주석 처리하면 로그에 `Setting initial memory to 1G and max to 1G`, 프로세스는 `java -Xmx1G -Xms1G -jar ...`. |
 | 2026-10-03 | 같은 장비 | 월드 구조는 `2026sgshs/dimensions/minecraft/{overworld,the_nether,the_end}/region` — `_nether`, `_the_end` 폴더는 생기지 않는다. 래퍼 `up`·`logs`·`status`·`cmd`·`console`·`backup`(켜짐/꺼짐)·`restart`·`stop`·`start`·`update`·`down` 모두 정상. `backup` 의 정지는 세 차원을 모두 저장한 뒤 1초 안에 끝남(새 월드). |
+| 2026-10-03 | Windows 11 PC (RAM 16GB, HDD, Docker Desktop 29.8.0 + WSL2, `.wslconfig` 없음) | `mc.bat` 의 `help`·`up`·`status`·`cmd`·`backup`·`down` 모두 정상, 종료코드도 기대대로(PowerShell 7·5.1, cmd). 이미지 pull 4분 45초, 컨테이너 시작부터 서버 `Done` 까지 15분 9초(총 약 20분). 서버 jar 받기·패치 단계가 가장 느렸다. `backup` 21.7초, 백업 뒤 다시 `Done` 까지 7분 15초. |
+| 2026-10-03 | 같은 장비 | `MEMORY: ""` → `java -jar` 힙 옵션 없음. WSL VM 7.72GiB(PC RAM 의 50%)의 25% = 최대 힙 1.93GiB, 대기 사용량 1.1~1.3GiB. 백업 tar 최상위는 `2026sgshs/` 하나(세 차원 포함). 로그를 CP949 로 읽으면 `[Script]` 한글이 깨지고, PowerShell 은 `[Console]::OutputEncoding = [Text.Encoding]::UTF8` 로 해결. Geyser 의 `Done` 줄이 서버 `Done` 보다 6초 먼저 찍힘. |

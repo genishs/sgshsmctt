@@ -27,7 +27,9 @@
 bash docker/mc.sh up          # Windows: docker\mc.bat up — 저장소 어디서나
 cd docker && docker compose up -d   # 직접 하려면
 ```
-플러그인 업데이트 스크립트 완료 후 서버가 자동으로 시작됩니다. 기동 완료까지 40~80초 걸립니다.
+플러그인 업데이트 스크립트 완료 후 서버가 자동으로 시작됩니다. 기동 완료는 SSD 장비에서 재기동 1분
+안팎, HDD 장비에서는 재기동 수 분·첫 기동 약 20분입니다(2026-10-03 실측). 완료 판정은
+`For help, type "help"` 가 붙은 `Done` 줄로 합니다 — Geyser 도 `Done` 줄을 먼저 찍습니다.
 
 `docker compose`는 반드시 `docker/` 폴더에서 실행해야 합니다. 저장소 루트에서 실행하려면
 위치에 무관하게 동작하는 래퍼(`mc.sh` / `mc.bat`)나 `pull-and-up.sh` / `pull-and-up.bat`을 사용하세요.
@@ -123,6 +125,10 @@ grep -o '"release":"[^"]*"'               # 항상 빈 값
 - **`.bat` 에서 같은 폴더의 배치를 부를 때**는 `call "%~dp0pull-and-up.bat"` 처럼 전체 경로를 씁니다.
   `NoDefaultCurrentDirectoryInExePath` 가 켜진 셸에서는 현재 폴더를 찾지 않아 이름만으로는 실패합니다
 - **`.bat` 의 `( ... )` 블록 안 `echo` 에는 괄호를 쓰지 않습니다.** 블록이 그 자리에서 닫힙니다
+- **`mc.bat` 에 `chcp` 를 넣지 않습니다.** 컨테이너 로그는 UTF-8 이라 한국어 Windows(CP949)에서
+  `[Script]` 한글이 깨질 수 있지만, 배치 안의 `chcp 65001` 은 PowerShell 의 해독에는 영향이 없고 65001 이
+  세션에 남아 한국어 시스템 메시지를 거꾸로 깨뜨립니다. 해결은 문서의 PowerShell 안내
+  (`[Console]::OutputEncoding = [Text.Encoding]::UTF8`)로 합니다
 - **`mc.sh` 와 `mc.bat` 은 같은 명령 집합을 유지합니다.** 한쪽에 명령을 더하면 다른 쪽과 README·RUNNING
   의 래퍼 표도 함께 고칩니다
 - **Bash 규칙**: 스크립트는 간단하고 직관적인 로직 사용 (복잡한 파이프라인 없음)
