@@ -72,7 +72,8 @@ backup() {
     level=$(level_name)
     [ -d "data/$level" ] \
         || fail "docker/data/$level 이 없습니다. 서버를 한 번 띄워 월드가 생긴 뒤 백업하세요."
-    # Purpur 같은 Bukkit 계열 서버는 네더·엔드를 <level>_nether, <level>_the_end 폴더에 따로 둔다
+    # 26.x 는 네더·엔드를 <level>/dimensions/minecraft/ 안에 함께 둔다(Purpur 26.2 실측).
+    # 1.21 이하 Bukkit 계열에서 만든 월드는 <level>_nether, <level>_the_end 가 따로 있을 수 있어 있으면 함께 묶는다
     for d in "$level" "${level}_nether" "${level}_the_end"; do
         if [ -d "data/$d" ]; then dirs+=("$d"); fi
     done

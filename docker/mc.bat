@@ -140,7 +140,9 @@ if not exist "data\%LEVEL%\" (
     echo [mc] docker\data\%LEVEL% not found. Start the server once so the world exists, then back up.
     exit /b 1
 )
-REM Bukkit-based servers such as Purpur keep the nether and the end in separate folders.
+REM Since 26.x the nether and the end live inside the world folder under dimensions\minecraft.
+REM Worlds made by Bukkit-based servers on 1.21 or older may still have separate _nether and
+REM _the_end folders, so add them when present.
 set "DIRS=%LEVEL%"
 if exist "data\%LEVEL%_nether\" set "DIRS=%DIRS% %LEVEL%_nether"
 if exist "data\%LEVEL%_the_end\" set "DIRS=%DIRS% %LEVEL%_the_end"

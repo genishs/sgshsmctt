@@ -456,22 +456,30 @@ Bedrock 플레이어를 op 할 때는 닉네임 앞의 `.` 까지 포함합니�
 
 ### 7.3 백업
 
-월드는 `docker/data/<level-name>/` 입니다. Purpur 같은 Bukkit 계열 서버는 **네더와 엔드를
-`<level-name>_nether/`, `<level-name>_the_end/` 폴더에 따로** 두므로 셋을 함께 묶어야 합니다.
+월드는 `docker/data/<level-name>/` 입니다. 26.x 부터는 **네더와 엔드도 이 폴더 안
+`dimensions/minecraft/` 아래에 함께 저장**되므로 이 폴더 하나만 묶으면 됩니다(Purpur 26.2 실측).
+1.21 이하의 Bukkit 계열 서버는 네더·엔드를 `<level-name>_nether/`, `<level-name>_the_end/` 폴더에
+따로 두었습니다. 그 시절에 만든 월드라 이 폴더가 남아 있다면 함께 묶습니다.
 **정지한 상태에서** 묶습니다. 기동 중에 뜨면 저장 중인 청크가 섞여 깨질 수 있습니다.
 
-**래퍼 (권장).** 서버가 켜져 있으면 잠시 멈추고, 세 폴더를 묶은 뒤, 다시 켭니다. tar 가 실패해도
-서버는 다시 켭니다.
+**래퍼 (권장).** 서버가 켜져 있으면 잠시 멈추고, 월드 폴더를 묶은 뒤, 다시 켭니다. 예전 형식의
+`_nether` / `_the_end` 폴더가 있으면 함께 묶습니다. tar 가 실패해도 서버는 다시 켭니다.
 
 ```bash
 bash docker/mc.sh backup      # Windows: docker\mc.bat backup
 ```
 
+실제 출력(새 월드 기준):
+
 ```
 [mc] 저장 중인 청크가 섞이지 않도록 서버를 잠시 멈춥니다...
-[mc] 백업: 2026sgshs 2026sgshs_nether 2026sgshs_the_end → docker/backups/2026sgshs-20261003-213000.tar
+ Container mc-crossplay Stopping
+ Container mc-crossplay Stopped
+[mc] 백업: 2026sgshs → docker/backups/2026sgshs-20261003-093825.tar
 [mc] 서버를 다시 켭니다...
-[mc] ✓ 완료: docker/backups/2026sgshs-20261003-213000.tar (1.2G)
+ Container mc-crossplay Starting
+ Container mc-crossplay Started
+[mc] ✓ 완료: docker/backups/2026sgshs-20261003-093825.tar (6.5M)
 ```
 
 **직접 하려면:**
@@ -481,7 +489,7 @@ cd docker
 docker compose stop
 mkdir -p backups
 cd data
-tar -cf ../backups/2026sgshs-$(date +%Y%m%d-%H%M%S).tar 2026sgshs*   # _nether, _the_end 까지
+tar -cf ../backups/2026sgshs-$(date +%Y%m%d-%H%M%S).tar 2026sgshs*   # 예전 형식 _nether, _the_end 가 있으면 함께
 cd ..
 docker compose start
 ```
@@ -575,3 +583,6 @@ Linux 에서 파일 권한 때문에 tar 가 실패하면 `sudo bash docker/mc.s
 | 2026-09-04 | Linux VM (Ubuntu, RAM 15.9G + swap 3.8G, Docker Engine) | Purpur 26.2-2632 `Done (17.795s)`. Geyser 2.11.2 / floodgate 2.2.5 / ViaVersion 5.11.0 자동 설치. Bedrock 클라이언트가 같은 LAN 에서 UDP 19132 로 접속·플레이 확인. override 로 `MEMORY=6G`, `mem_limit=memswap_limit=8g` 적용 시 컨테이너 사용량 **4.1GiB / 8GiB, 스왑 0**. |
 | 2026-09-04 | 같은 장비 | 당시 커밋값 `MEMORY=28G` 그대로도 `java -Xms28g -Xmx28g -version` 은 exit 0 — 즉 **뜬다**. `vm.overcommit_memory=1` + `USE_AIKAR_FLAGS` 기본 off(`AlwaysPreTouch` 없음)라 힙을 미리 만지지 않기 때문. 문제는 기동이 아니라 그 뒤의 성장. |
 | 2026-09-04 | 같은 장비 | `docker run -m 2g --memory-swap 2g` → `memory.swap.max=0`. `memswap_limit == mem_limit` 은 스왑을 0 으로 잠근다(의도). |
+| 2026-10-03 | Linux VM (Ubuntu 24.04, RAM 31G, Docker Engine 29.8.1, Compose v5.5.1) | 새로 클론한 저장소에서 `mc.sh up` 으로 기동. 이미지 pull 포함 첫 기동 약 3분 30초, `Done (17.064s)`. Purpur 26.2-2633, Java 25. 재시작은 약 35~50초. |
+| 2026-10-03 | 같은 장비 | `MEMORY: ""` 이면 실제 서버 프로세스가 `java -jar /data/purpur-26.2-2633.jar` 로 **힙 옵션 없이** 뜬다. 같은 컨테이너에서 JVM 이 정한 최대 힙 7.82GiB = 31.29GiB 의 25%, 대기 중 사용량 1.6GiB. `MEMORY` 줄을 주석 처리하면 로그에 `Setting initial memory to 1G and max to 1G`, 프로세스는 `java -Xmx1G -Xms1G -jar ...`. |
+| 2026-10-03 | 같은 장비 | 월드 구조는 `2026sgshs/dimensions/minecraft/{overworld,the_nether,the_end}/region` — `_nether`, `_the_end` 폴더는 생기지 않는다. 래퍼 `up`·`logs`·`status`·`cmd`·`console`·`backup`(켜짐/꺼짐)·`restart`·`stop`·`start`·`update`·`down` 모두 정상. `backup` 의 정지는 세 차원을 모두 저장한 뒤 1초 안에 끝남(새 월드). |

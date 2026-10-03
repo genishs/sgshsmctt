@@ -137,5 +137,7 @@ grep -o '"release":"[^"]*"'               # 항상 빈 값
    (`docker-compose` v1이 아니라 v2 플러그인 문법 `docker compose`를 사용).
    Docker 가 없는 장비에서는 `docker` 를 호출 내역만 기록하는 가짜 실행 파일로 바꿔 래퍼의 명령 순서를
    확인할 수 있습니다. 실제 구동 검증은 아니므로 결과를 그렇게 구분해 적습니다
-5. **백업**: Bukkit 계열 서버(Purpur)는 네더·엔드를 `<level-name>_nether`, `<level-name>_the_end`
-   폴더에 따로 둡니다. 백업 대상에서 빠뜨리지 않습니다
+5. **백업**: 26.x 는 네더·엔드를 월드 폴더 안 `dimensions/minecraft/{overworld,the_nether,the_end}` 에
+   함께 둡니다(Purpur 26.2 실측). 1.21 이하 Bukkit 계열은 `<level-name>_nether`, `<level-name>_the_end` 를
+   따로 두었으므로 래퍼는 그 폴더가 있으면 함께 묶습니다. 옛 버전 데이터에서 본 폴더 구조를 새 버전에
+   그대로 일반화하지 말고, 새 버전으로 띄운 월드에서 확인합니다
